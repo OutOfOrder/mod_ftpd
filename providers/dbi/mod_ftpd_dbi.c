@@ -214,7 +214,7 @@ static apr_status_t safe_dbi_new_conn(void **resource, void *params,
             dbi_conn_set_option(myres->conn, "password", (char *)pwd);
             dbi_conn_set_option(myres->conn, "dbname", (char *)name);
             if (dbi_conn_connect(myres->conn) != 0) {
-                err_num = dbi_conn_error(myres->conn, (char **)&err_str);
+                err_num = dbi_conn_error(myres->conn, (const char **)&err_str);
                 /* Connetion Failed */
                 ap_log_perror(APLOG_MARK, APLOG_ERR, 0, r,
                               "[mod_ftpd_dbi.c] DBI Connection to %s://%s@%s/%s Failed. Error: (%d) %s",
@@ -630,7 +630,7 @@ static int safe_dbi_query(ftpd_dbi_rest * mydbi_res, dbi_result * res,
 
 
     if (res == NULL) {
-        err_num = dbi_conn_error(mydbi_res->conn, (char **)&err_str);
+        err_num = dbi_conn_error(mydbi_res->conn, (const char **)&err_str);
         ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r,
                       "[mod_ftpd_dbi.c] SQL Query Failed.  DBI said: (%d) %s",
                       err_num, err_str);

@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.36 2004/01/22 20:47:07 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.37 2004/03/06 16:19:55 urkle Exp $ */
 #define CORE_PRIVATE
 #include "httpd.h"
 #include "http_protocol.h"
@@ -783,7 +783,8 @@ HANDLER_DECLARE(pasv)
 		apr_generate_random_bytes((unsigned char *)&port,2);
 		port = ( (pConfig->nMaxPort - pConfig->nMinPort) * port) / 65535;
 		port += pConfig->nMinPort;
-		apr_sockaddr_port_set(listen_addr,port);
+		apr_sockaddr_info_get(&listen_addr,ipaddr, family, port, 0, ur->data.p);
+		//apr_sockaddr_port_set(listen_addr,port);
 		if ((res = apr_socket_bind(ur->data.pasv, listen_addr))==APR_SUCCESS) {
 			break;
 		}

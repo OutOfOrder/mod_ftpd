@@ -54,7 +54,7 @@
  */
 
 
-/* $Header: /home/cvs/httpd-ftp/providers/default/mod_ftpd_default.c,v 1.4 2004/03/05 04:09:06 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/providers/default/mod_ftpd_default.c,v 1.5 2004/03/06 16:19:55 urkle Exp $ */
 #include "httpd.h"
 #include "http_config.h"
 #include "apr_strings.h"
@@ -133,8 +133,8 @@ static int ftpd_default_post_conf(apr_pool_t *p, apr_pool_t *log, apr_pool_t *te
 	rv = apr_global_mutex_create(&ftpd_global_mutex, ftpd_global_mutex_file,
 			APR_LOCK_DEFAULT, p);
 	if (rv != APR_SUCCESS) {
-		ap_log_perror(APLOG_MARK, APLOG_EMERG, 0, log,
-			"[mod_ftpd_default.c] - Failed creating global lock mutex! apr_global_mutex_create returned: (%d)", rv);
+		ap_log_perror(APLOG_MARK, APLOG_EMERG, rv, log,
+			"[mod_ftpd_default.c] - Failed creating global lock mutex!");
 		return rv;
 	}
 	apr_pool_cleanup_register(p, NULL, ftpd_cleanup_locks, apr_pool_cleanup_null);
@@ -174,20 +174,20 @@ static void ftpd_default_init_child(apr_pool_t *pchild, server_rec *s)
 	rv = apr_global_mutex_child_init(&ftpd_global_mutex,
 			ftpd_global_mutex_file, pchild);
 	if (rv != APR_SUCCESS) {
-		ap_log_error(APLOG_MARK, APLOG_ERR, 0, s,
-			"Error attaching to global mutex: %d", rv);
+		ap_log_error(APLOG_MARK, APLOG_ERR, rv, s,
+			"Error attaching to global mutex");
 		return;
 	}
 	rv = apr_shm_create(&ftpd_counter_shm, sizeof(ftpd_default_counter_rec)*server_count,
 			MOD_FTPD_DEFAULT_SHMEM_CACHE, pchild);
 	if (rv == APR_EEXIST) {
-		ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
-			"shm already exists: reconnecting: %d", rv);
+		ap_log_error(APLOG_MARK, APLOG_DEBUG, rv, s,
+			"shm already exists: reconnecting");
 		rv = apr_shm_attach(&ftpd_counter_shm, MOD_FTPD_DEFAULT_SHMEM_CACHE, pchild);
 	}
 	if (rv != APR_SUCCESS) {
-		ap_log_error(APLOG_MARK, APLOG_ERR, 0, s,
-			"Error attaching to shared memory: %d", rv);
+		ap_log_error(APLOG_MARK, APLOG_ERR, rv, s,
+			"Error attaching to shared memory");
 		return;
 	}
 	apr_pool_cleanup_register(pchild, NULL, ftpd_cleanup_shm, apr_pool_cleanup_null);
