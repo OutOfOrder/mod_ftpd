@@ -9,6 +9,7 @@
  * to a request in progress.  Best here, rather than elsewhere, since
  * *someone* has to set the protocol-specific fields...
  */
+#include "httpd.h"
 
 void ap_set_sub_req_protocol(request_rec *rnew, const request_rec *r)
 {
