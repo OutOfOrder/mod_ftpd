@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/ftp.h,v 1.22 2004/01/08 22:11:31 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp.h,v 1.23 2004/01/22 20:03:41 urkle Exp $ */
 #ifndef FTP_H
 #define FTP_H
 
@@ -111,6 +111,7 @@ typedef struct {
 } ftpd_svr_config_rec;
 
 typedef struct {
+	int bAllowOverwrite;	/* Can a STOR overwrite an existing file. */
 } ftpd_dir_config_rec;
 
 apr_hash_t *ftpd_hash;

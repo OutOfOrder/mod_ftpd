@@ -54,7 +54,7 @@
  */
 
 
-/* $Header: /home/cvs/httpd-ftp/ftp_core.c,v 1.21 2004/01/08 22:11:31 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp_core.c,v 1.22 2004/01/22 20:03:41 urkle Exp $ */
 /* An FTP Protocol Module for Apache
  * RFC 959 - Primary FTP definition
  * RFC 1123 - Updated refinement of FTP
@@ -150,6 +150,13 @@ static void *ftpd_create_server_config(apr_pool_t *p, server_rec *s)
     return pConfig;
 }
 
+static void *ftpd_create_perdir_config(apr_pool_t *p, char *dir)
+{
+    ftpd_dir_config_rec *dConfig = apr_pcalloc(p, sizeof *dConfig);
+	dConfig->bAllowOverwrite = 1;
+    return dConfig;
+}
+
 static int process_ftpd_connection(conn_rec *c)
 {
     server_rec *s = c->base_server;
@@ -237,7 +244,9 @@ static int translate_chroot(request_rec *r)
     if (!pConfig->bEnabled) {
         return DECLINED;
     }
-
+	if (!ur) {
+		return DECLINED;
+	}
 	if (!ur->chroot) {
 		return DECLINED;
 	}
@@ -264,6 +273,18 @@ static int translate_chroot(request_rec *r)
 			"Stat Error");
 	}
 	return DECLINED;
+}
+
+/* Prevent mod_dir from adding directory indexes */
+static int ftpd_fixup_path(request_rec *r)
+{
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
+
+	if (!ur) {
+		return DECLINED;
+	}
+	r->path_info = r->filename;
+	return OK;
 }
 
 FTPD_DECLARE(void) ftpd_register_handler(char *key, ftpd_handler *func, int states,
@@ -346,6 +367,7 @@ static void register_hooks(apr_pool_t *p)
 {
 	static const char * const aszPre[] = { "mod_alias.c", NULL };
 	static const char * const aszSucc[]= { "mod_vhost_alias.c", NULL };
+	static const char * const fixupSucc[] = { "mod_dir.c", NULL };
 	ftpd_hash = apr_hash_make(p);
 
     ap_hook_process_connection(process_ftpd_connection,NULL,NULL,
@@ -354,7 +376,8 @@ static void register_hooks(apr_pool_t *p)
 	ap_hook_post_config(ftpd_init_handler, NULL, NULL, APR_HOOK_MIDDLE);
 /* Translate hook for Chroot supporting */
 	ap_hook_translate_name(translate_chroot, aszPre, aszSucc, APR_HOOK_MIDDLE);
-	
+/* Fixup to prevent mod_dir from messing with my paths */
+	ap_hook_fixups(ftpd_fixup_path, NULL, fixupSucc, APR_HOOK_LAST);
 /* Register input/output filters */
 /*    ap_register_output_filter("FTPD_COMMAND_OUTPUT", ftpd_command_output_filter,
 							  NULL, AP_FTYPE_CONNECTION);
@@ -525,14 +548,16 @@ static const command_rec ftpd_cmds[] = {
 	AP_INIT_FLAG("FtpServerAnnounce", ap_set_server_flag_slot,
 				(void *)APR_OFFSETOF(ftpd_svr_config_rec, bAnnounce), RSRC_CONF,
 				"Whether to announce this module in the server header. Default: On"),
-
+	AP_INIT_FLAG("FtpAllowOverwrite", ap_set_flag_slot,
+				(void *)APR_OFFSETOF(ftpd_dir_config_rec, bAllowOverwrite), RSRC_CONF | ACCESS_CONF,
+				"Whether to allow overwriting of files when using store. Default: On"),
 	{ NULL }
 };
 
 
 module AP_MODULE_DECLARE_DATA ftpd_module = {
 	STANDARD20_MODULE_STUFF,
-    NULL,                       /* create per-directory config structure */
+    ftpd_create_perdir_config,  /* create per-directory config structure */
     NULL,                       /* merge per-directory config structures */
     ftpd_create_server_config,  /* create per-server config structure */
     NULL,                       /* merge per-server config structures */

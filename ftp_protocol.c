@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.34 2004/01/09 07:25:38 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.35 2004/01/22 20:03:41 urkle Exp $ */
 #define CORE_PRIVATE
 #include "httpd.h"
 #include "http_protocol.h"
@@ -264,7 +264,8 @@ static request_rec *ftpd_create_subrequest(request_rec *r, ftpd_user_rec *ur)
 	return rnew;
 }
 
-#define ftpd_check_acl(a,b) ftpd_check_acl_ex(a,b,0)
+#define ftpd_check_acl(r) ap_process_request_internal(r)
+/*#define ftpd_check_acl(r) ftpd_check_acl_ex(NULL,r,0)*/
 
 static int ftpd_check_acl_ex(const char *newpath, request_rec *r, int skipauth) 
 {
@@ -459,6 +460,7 @@ HANDLER_DECLARE(quit)
     ftpd_user_rec *ur = ftpd_get_user_rec(r);
 
     if (ur->state & FTPD_STATE_TRANSACTION) {
+		/* TODO: Add logoff statistics */
         ap_rprintf(r, FTP_C_GOODBYE"-FTP Statistics go here.\r\n");
     }
 	ap_rprintf(r, FTP_C_GOODBYE" Goodbye.\r\n");
@@ -605,7 +607,7 @@ HANDLER_DECLARE(cd)
 	r->method = apr_pstrdup(r->pool, "CHDIR");
 	r->method_number = ftpd_methods[FTPD_M_CHDIR];
 
-	if (ftpd_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -941,7 +943,7 @@ HANDLER_DECLARE(list)
 		return FTPD_HANDLER_SERVERERROR;
 	}
 
-	if (ftpd_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		ftpd_data_socket_close(ur);
@@ -1102,7 +1104,7 @@ HANDLER_DECLARE(retr)
 	r->the_request = apr_psprintf(r->pool, "RETR %s", r->uri);
 	ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, r);
 
-	if (ftpd_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		ftpd_data_socket_close(ur);
@@ -1197,7 +1199,7 @@ HANDLER_DECLARE(size)
 	r->method = apr_pstrdup(r->pool,"LIST");
 	r->method_number = ftpd_methods[FTPD_M_LIST];
 
-	if (ftpd_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -1237,7 +1239,7 @@ HANDLER_DECLARE(mdtm)
 	r->method = apr_pstrdup(r->pool,"LIST");
 	r->method_number = ftpd_methods[FTPD_M_LIST];
 
-	if (ftpd_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -1276,6 +1278,9 @@ HANDLER_DECLARE(stor)
 	ftpd_user_rec *ur = ftpd_get_user_rec(r);
 	ftpd_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
 					&ftpd_module);
+/* TODO: find out why the correct per dir config doesn't get imported */
+	ftpd_dir_config_rec *dConfig = ap_get_module_config(r->per_dir_config,
+					&ftpd_module);
 
 	if (strlen(buffer)==0) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid filename.\r\n");
@@ -1300,7 +1305,11 @@ HANDLER_DECLARE(stor)
 		r->the_request = apr_psprintf(r->pool, "APPEND %s", r->uri);
 	} else {
 /* STORe, error out if the file already exists */
-		flags = APR_WRITE | APR_CREATE | APR_EXCL;
+		if (dConfig->bAllowOverwrite) {
+			flags = APR_WRITE | APR_CREATE | APR_TRUNCATE;
+		} else {
+			flags = APR_WRITE | APR_CREATE | APR_EXCL;
+		}
 		/* Set Method */
 		r->method = apr_pstrdup(r->pool,"PUT");
 		r->method_number = M_PUT;
@@ -1308,7 +1317,7 @@ HANDLER_DECLARE(stor)
 	}
 	ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, r);
 
-	if (ftpd_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		ftpd_data_socket_close(ur);
@@ -1413,7 +1422,7 @@ HANDLER_DECLARE(rename)
 	r->method = apr_pstrdup(r->pool,"MOVE");
 	r->method_number = M_MOVE;
 
-	if (ftpd_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(r)!=OK) {
 		ap_rprintf(r, FTP_C_RENAMEFAIL" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -1466,7 +1475,7 @@ HANDLER_DECLARE(delete)
 	r->method = apr_pstrdup(r->pool,"DELETE");
 	r->method_number = M_DELETE;
 
-	if (ftpd_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -1509,7 +1518,7 @@ HANDLER_DECLARE(mkdir)
 	r->method = apr_pstrdup(r->pool,"MKCOL");
 	r->method_number = M_MKCOL;
 
-	if (ftpd_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -1548,7 +1557,7 @@ HANDLER_DECLARE(rmdir)
 	r->method = apr_pstrdup(r->pool,"XRMD");
 	r->method_number = ftpd_methods[FTPD_M_XRMD];
 
-	if (ftpd_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;

@@ -1,3 +1,9 @@
+0.12.1: 2004-01-22
+	minor update to add an "FTPAllowOverwrite" flag to allow STOR to overwrite
+		existing files.. (per directory configation option)
+		Which doesn't work.. (need to figure out why perdir configuration isn't
+		being imported)
+
 0.12.0: 2004-01-09
 	renamed module to mod_ftpd
 	converted documentation to DocBook in the docs directory
