@@ -1,9 +1,22 @@
-Build instructions
+---------------
+I. Introduction
+---------------
+This is a FTP Protocol Server module for Apache 2.0 and 2.1.
+It is based loosly on the mod_pop3 code base, so many thanks to the author of 
+mod_pop3. This is still a developmental module, and directives and features may
+change without notice from release to release.  There is a sample configuration
+provided at the end of this document.
+
+----------------------------------------
+II. Building and installing instructions
+----------------------------------------
 1) ./configure --with-apache=/path/to/apache
 2) make
 3) su -c "make install"
 
-
+-------------------------
+III. Sample configuration
+-------------------------
 a sample config entry
 
 Listen 21
@@ -15,7 +28,14 @@ Listen 21
 	FTPMinPort 1024
 	FTPPaxPort 65535
 	<Directory /var/ftp>
-	   AuthDBMUserFile /usr/local/httpd/ftp
+	   AuthUserFile /usr/local/httpd/ftp
+	    Anonymous_Authoritative oN
+    	AuthAuthoritative Off
+    	Anonymous_NoUserID off
+    	Anonymous_MustGiveEmail off
+    	Anonymous_VerifyEmail off
+    	Anonymous_LogEmail off
+    	Anonymous anonymous guest
 	   AuthName ftp
 	   AuthType Basic
 	   require valid-user
@@ -24,9 +44,46 @@ Listen 21
 	   allow by all
 	</Directory>
 	<Directory /var/ftp/upload>
-		<LimitExcept STOR STOU>
+		<LimitExcept STOR STOU DELE RNTO XMKD XRMD>
 			order allow,deny
 			deny by all
 		</Limit>
 	</Directory>
 </VirtualHost>
+
+--------------------------------
+IV. Known issues and limitations
+--------------------------------
+These are some of the known issues and limitations of the module.  Also check
+the TODO file for any issues that didn't make their way into this document. And
+of course, if you feel the urge to actually implement something on my TODO list
+feel free to, and submit it to me via a patch.
+
+1. This module has been build using Apache 2.0.48. I have had people test it
+on 2.0.47 and 2.1 CVS HEAD..  But I have not officially tested it on 2.1 yet.
+When an official release of 2.1 is out, then I wil test and modify my module for
+this branch of Apache.
+
+2. <Location> tags seem to have no effect on access control, not sure why..
+
+3. Transfered files do NOT go through apache filters and bucket brigades.. When
+I figure them out, I will support that feature.. (dynamic FTP content..)
+
+4. There is currently no support user/group dependent roots.. (ie. a 
+different FTP root for a specific logged in user). It is, however, being planned
+and will be added in a future release once the base FTP specification is
+implemented.
+
+5. IPv6 Support.. Yup, not in there.. It's in the TODO, I just need to support 
+the extended FTP commands, and then hope it works, as I don't have an IPv6
+network setup to test it on.
+
+----------------------
+V. Contact Information
+----------------------
+You can contact me on irc.freenode.net as nick urkle in the #apache-modules
+channel. Or you can Contact me via my website http://urkle.drip.ws/. Or e-mail 
+me at eddie <at> omegaware <dot> com.  Please put a meaningful subject line, 
+otherwise the e-mail may get spammed. Something like, "mod_ftp patch to 
+implement ipv6" would be quite acceptable.. However, "PLEASE READ THIS NOW" is 
+quite unacceptable and will most likely never be read.
