@@ -1,6 +1,0 @@
-TODO
- * Add in character conversion code, and logging
- * Start debugging to get all clients to connect correctly
- * STOR needs to be implemented
- * Handing ACL to Apache
- * read files from apache and not directly from disk to allow filters.
