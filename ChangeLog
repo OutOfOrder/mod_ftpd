@@ -1,3 +1,6 @@
+?: ?
+	updated license to ASL 2.0
+
 0.12.3: 2004-03-06
 	moved shared mem creation code to child_init instead of post_config to fix
 		segfault on startup if apache quit uncleanly.
