@@ -85,6 +85,9 @@
 
 #include "ftp.h"
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 static request_rec *ftp_create_request(ftp_user_rec *ur)
 {

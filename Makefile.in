@@ -2,14 +2,14 @@
 
 # Modify these top variables.
 SOURCES = \
-	ftp_module.c \
+	ftp_core.c \
 	ftp_protocol.c
 
 HEADERS = \
 	ftp.h \
 	server_config.h
 
-CFLAGS = -Wall -Werror
+CFLAGS = -Wc,all -Wc,error
 LDADD = 
 EXTRA_DIST = TODO AUTHORS README NEWS ChangeLog
 
@@ -26,14 +26,13 @@ LO = $(SOURCES:.c=.lo)
 
 SLO = $(SOURCES:.c=.slo)
 
-
 STD_DIST = install-sh missing mkinstalldirs Makefile.in configure.in configure
 
 TODO: TODO_HEADER $(SOURCE) $(HEADERS)
 	./gen_todo.pl
 
 @PACKAGE_NAME@.la : $(SOURCES)
-	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(SOURCES) $(CFLAGS)
+	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(CFLAGS) @DEFS@ $(SOURCES) 
 
 install:
 	@APXS_BIN@ -i @PACKAGE_NAME@.la
@@ -42,7 +41,8 @@ clean:
 	$(RM) $(OBJ) $(SLO) $(LO) @PACKAGE_NAME@.la
 
 distclean: clean
-	$(RM) TODO config.status config.log config.h config.h.in configure
+	$(RM) TODO config.status config.log config.h config.h.in \
+	configure stamp-h stamp-h.in Makefile
 
 # Regenerate makefiles
 # autoheader might not change config.h.in, so touch a stamp file.

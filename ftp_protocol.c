@@ -74,6 +74,10 @@
 
 #include "ftp.h"
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 static int ftp_data_socket_close(ftp_user_rec *ur)
 {
 	switch (ur->data.type) {
