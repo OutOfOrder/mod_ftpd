@@ -134,7 +134,7 @@ $(builddir)/.deps: depend
 
 depend: $(SOURCES) $(HEADERS)
 	@if test -n "`ls $(srcdir)/*.c 2> /dev/null`"; then \
-		$(CC) -MM -MT $(TARGET) -I@APACHE_INCDIR@ @DEFS@ $(srcdir)/*.c > $(builddir)/.deps || true; \
+		$(CC) -MM -MT $(TARGET) @AP_CPPFLAGS@ @DEFS@ $(srcdir)/*.c > $(builddir)/.deps || true; \
 	fi
 
 include $(builddir)/.deps
