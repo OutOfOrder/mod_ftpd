@@ -100,14 +100,15 @@ typedef enum {
 
 /* connection state */
 typedef enum {
-	FTP_AUTH 			= 0x01,
-	FTP_USER_ACK 		= 0x02,
-	FTP_TRANS_NODATA 	= 0x04,
-	FTP_TRANS_DATA 		= 0x08,
-	FTP_TRANS_RENAME	= 0x10,
-	FTP_NOT_IMPLEMENTED = 0x20,
-	FTP_FEATURE 		= 0x40,
-	FTP_SET_AUTH 		= 0x80
+	FTP_AUTH 			= 0x001,
+	FTP_USER_ACK 		= 0x002,
+	FTP_TRANS_NODATA 	= 0x004,
+	FTP_TRANS_DATA 		= 0x008,
+	FTP_TRANS_RENAME	= 0x010,
+	FTP_NOT_IMPLEMENTED = 0x020,
+	FTP_FEATURE 		= 0x040,
+	FTP_SET_AUTH 		= 0x080,
+	FTP_EPSV_LOCK		= 0x100
 } ftp_state;
 
 /* All States does not contain FTP_NOT_IMPLEMENTED */
@@ -145,6 +146,7 @@ typedef struct ftp_user_rec {
 	ftp_datacon_rec	data;
 
     ftp_state state;
+	int flags;
 
 } ftp_user_rec;
 

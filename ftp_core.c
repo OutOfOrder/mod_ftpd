@@ -63,6 +63,7 @@
  * RFC 2389 - FEAT command for features supported by server
  * RFC 2428 - EPRT,EPSV IPV4,IPV6 support
  * RFC 2640 - Internationalization support
+ * draft-ietf-ftpext-mlst-16,txt(on www.ietf.org) MDTM, SIZE, and MLST
  * http://www.wu-ftpd.org/rfc/
  * http://war.jgaa.com/ftp/?cmd=rfc
  * http://cr.yp.to/ftp.html
@@ -130,7 +131,7 @@ static request_rec *ftp_create_request(ftp_user_rec *ur)
 
 static void *ftp_create_server_config(apr_pool_t *p, server_rec *s)
 {
-    ftp_config_rec *pConfig = apr_pcalloc(p, sizeof *pConfig);
+    ftp_svr_config_rec *pConfig = apr_pcalloc(p, sizeof *pConfig);
 
     pConfig->bEnabled = 0;
 	pConfig->nMinPort = 1024;
@@ -138,6 +139,7 @@ static void *ftp_create_server_config(apr_pool_t *p, server_rec *s)
 	pConfig->bRealPerms = 0;
 	pConfig->bAllowPort = 1;
 	pConfig->aChrootOrder = apr_array_make(p, 1, sizeof(ftp_provider *));
+	pConfig->bAnnounce = 1;
     return pConfig;
 }
 
@@ -148,7 +150,7 @@ static int process_ftp_connection(conn_rec *c)
 	ftp_user_rec *ur;
 	apr_pool_t *p;
 	apr_bucket_brigade *bb;
-    ftp_config_rec *pConfig = ap_get_module_config(c->base_server->module_config,
+    ftp_svr_config_rec *pConfig = ap_get_module_config(c->base_server->module_config,
                                                &ftp_module);
 
     if (!pConfig->bEnabled) {
@@ -189,6 +191,8 @@ static int process_ftp_connection(conn_rec *c)
 static int ftp_init_handler(apr_pool_t *p, apr_pool_t *log, apr_pool_t *ptemp,
 					server_rec *s)
 {
+	ftp_svr_config_rec *pConfig = ap_get_module_config(s->module_config,
+					&ftp_module);
 	/* Register FTP methods */
 	/* the RETR command */
 	ftp_methods[FTP_M_RETR] = ap_method_register(p, "RETR");
@@ -210,8 +214,9 @@ static int ftp_init_handler(apr_pool_t *p, apr_pool_t *log, apr_pool_t *ptemp,
 	
 
 	/* Add version string to Apache headers */
-	/* TODO: Make configure flag to disable adding in server string */
-	ap_add_version_component(p, PACKAGE_NAME"/"PACKAGE_VERSION);
+	if (pConfig->bAnnounce) {
+		ap_add_version_component(p, PACKAGE_NAME"/"PACKAGE_VERSION);
+	}
 	return OK;
 }
 
@@ -222,7 +227,7 @@ static int translate_chroot(request_rec *r)
 	char *filename;
 	apr_status_t res;
 	apr_finfo_t statbuf;
-	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+	ftp_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
 								&ftp_module);
 	ftp_user_rec *ur = ftp_get_user_rec(r);
 
@@ -299,7 +304,7 @@ static const char *ftp_set_chroot_order(cmd_parms *cmd,
 {
 	ftp_provider *addme;
 	const ftp_provider *lookup;
-	ftp_config_rec *pConfig = ap_get_module_config(cmd->server->module_config,
+	ftp_svr_config_rec *pConfig = ap_get_module_config(cmd->server->module_config,
 								&ftp_module);
 
 	const char *err = ap_check_cmd_context(cmd,NOT_IN_DIR_LOC_FILE|NOT_IN_LIMIT);
@@ -430,11 +435,15 @@ static void register_hooks(apr_pool_t *p)
 
 /* Extended Commands for IPv6 support */
 	/* TODO: implement EPRT, and EPSV, RFCed IPV6 support */
-	ftp_register_handler("EPRT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
-	ftp_register_handler("EPSV", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("EPRT", HANDLER_FUNC(port), FTP_TRANSACTION,
+		"<sp> |af|addr|port|", (void *)1, p);
+	ftp_register_handler("EPSV", HANDLER_FUNC(pasv), FTP_TRANSACTION,
+		"[ <sp> af|ALL]", NULL, p);
 /*  LONG passive and port */
 	ftp_register_handler("LPRT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ftp_register_handler("LPSV", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+/* no documentation for this command can be found */
+	ftp_register_handler("SPSV", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* unknown */
 	ftp_register_handler("PROT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
@@ -457,29 +466,31 @@ static void register_hooks(apr_pool_t *p)
 
 static const command_rec ftp_cmds[] = {
     AP_INIT_FLAG("FTPProtocol", ap_set_server_flag_slot, 
-				(void *)APR_OFFSETOF(ftp_config_rec, bEnabled), RSRC_CONF,
+				(void *)APR_OFFSETOF(ftp_svr_config_rec, bEnabled), RSRC_CONF,
                  "Whether this server is serving the FTP protocol. Default: Off"),
 
 	AP_INIT_FLAG("FTPShowRealPermissions", ap_set_server_flag_slot,
-				(void *)APR_OFFSETOF(ftp_config_rec, bRealPerms), RSRC_CONF,
+				(void *)APR_OFFSETOF(ftp_svr_config_rec, bRealPerms), RSRC_CONF,
                  "Show Real Permissions of files. Default: Off"),
 
 	AP_INIT_FLAG("FTPAllowActive", ap_set_server_flag_slot,
-				(void *)APR_OFFSETOF(ftp_config_rec, bAllowPort), RSRC_CONF,
+				(void *)APR_OFFSETOF(ftp_svr_config_rec, bAllowPort), RSRC_CONF,
                  "Allow active(PORT) connections on this server. Default: On"),
 
 	AP_INIT_TAKE1("FTPPasvMinPort", ap_set_server_int_slot, 
-				(void *)APR_OFFSETOF(ftp_config_rec, nMinPort), RSRC_CONF,
+				(void *)APR_OFFSETOF(ftp_svr_config_rec, nMinPort), RSRC_CONF,
 				"Minimum PASV port to use for Data connections. Default: 1024"),
 
 	AP_INIT_TAKE1("FTPPasvMaxPort", ap_set_server_int_slot, 
-				(void *)APR_OFFSETOF(ftp_config_rec, nMaxPort), RSRC_CONF,
+				(void *)APR_OFFSETOF(ftp_svr_config_rec, nMaxPort), RSRC_CONF,
 				"Maximum PASV port to use for Data connections. Default: 65535"),
-
 	AP_INIT_ITERATE("FTPChroot", ftp_set_chroot_order,
 				NULL, RSRC_CONF,
 				"List of Chroot prviders to query for chrooting the loging in user. Default: none"),
-    { NULL }
+	AP_INIT_FLAG("FTPServerAnnounce", ap_set_server_flag_slot,
+				(void *)APR_OFFSETOF(ftp_svr_config_rec, bAnnounce), RSRC_CONF,
+				"Whether to announce this module in the server header. Default: On"),
+	{ NULL }
 };
 
 

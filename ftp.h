@@ -102,7 +102,11 @@ typedef struct {
 	int bRealPerms; /* Show real permissionts in file listing */
 	int bAllowPort; /* Whether to allow the PORT command */
 	apr_array_header_t *aChrootOrder; /* Order of chroot querying */
-} ftp_config_rec;
+	int bAnnounce; /* Annount in the server header */
+} ftp_svr_config_rec;
+
+typedef struct {
+} ftp_dir_config_rec;
 
 apr_hash_t *ap_ftp_hash;
 
@@ -133,6 +137,7 @@ apr_hash_t *ap_ftp_hash;
 #define FTP_C_TRANSFEROK	"226"
 #define FTP_C_ABOROK		"226"
 #define FTP_C_PASVOK		"227"
+#define FTP_C_EPASVOK		"229"
 #define FTP_C_LOGINOK		"230"
 #define FTP_C_CWDOK			"250"
 #define FTP_C_RMDIROK		"250"
@@ -160,6 +165,7 @@ apr_hash_t *ap_ftp_hash;
 #define FTP_C_NEEDUSER		"503"
 #define FTP_C_NEEDRNFR		"503"
 #define FTP_C_INVALIDARG	"504"
+#define FTP_C_INVALID_PROTO	"522"
 #define FTP_C_LOGINERR		"530"
 #define FTP_C_FILEFAIL		"550"
 #define FTP_C_PERMDENY		"550"
@@ -182,7 +188,7 @@ enum {
 
 int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb);
 
-#define HANDLER_PROTOTYPE request_rec *r, char *buffer, void *data, apr_pool_t *p
+#define HANDLER_PROTOTYPE request_rec *r, char *buffer, void *data
 
 typedef int ap_ftp_handler(HANDLER_PROTOTYPE);
 

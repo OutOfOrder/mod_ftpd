@@ -4,7 +4,6 @@
 SUBDIRS = 
 SOURCES = \
 	providers.c \
-	mod_ftp.c \
 	ftp_core.c \
 	ftp_protocol.c
 

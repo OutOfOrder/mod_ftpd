@@ -10,6 +10,8 @@ AC_PROG_CC
 
 AC_ARG_ENABLE(dbm_provider, [  --disable-dbm-provider  Do not compile the dbm provider],
 		, enable_dbm_provider=yes)
+AC_ARG_ENABLE(dbi_provider, [  --enable-dbi-provider  Ccompile the dbi provider],
+		enable_dbi_provider=yes, )
 
 APACHE_VERSION=2.0.44
 CHECK_PATH_APACHE($APACHE_VERSION,
@@ -23,6 +25,10 @@ dnl configure providers
 
 if test "$enable_dbm_provider" = yes; then
 	AC_CONFIG_SUBDIRS(providers/dbm)
+fi
+
+if test "$enable_dbi_provider" = yes; then
+	AC_CONFIG_SUBDIRS(providers/dbi)
 fi
 
 dnl Write config.status and the Makefile

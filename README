@@ -41,12 +41,17 @@ Listen 21
 	   require valid-user
 	   
 	   order allow,deny
-	   allow by all
+	   allow from all
 	</Directory>
+	<Location />
+		<LimitExtept LIST RETR>
+			deny from all
+		</LimitExcept>
+	</Location>
 	<Location /upload>
 		<LimitExcept LIST STOR XMKD>
-			deny by all
-		</Limit>
+			deny from all
+		</LimitExcept>
 	</Location>
 </VirtualHost>
 
@@ -82,11 +87,11 @@ FTPChroot
 	  	RETR, LIST, STOR, APPE, DELE, XMKD, XRMD, RNTO
 	RETR: ability to download a file.
 	LIST: ability to get a directory listing.
-	STOR: ability to stor a file
-	APPE: ability to append to a file (either APPE, or STOR w/ REST)
-	DELE: ability to delete a file
-	XMKD: ability to make a directory
-	XRMD: ability to remove a directory
+	STOR: ability to stor a file.
+	APPE: ability to append to a file (either APPE, or STOR w/ REST).
+	DELE: ability to delete a file.
+	XMKD: ability to make a directory.
+	XRMD: ability to remove a directory.
 	RNTO: ability to rename files and directories.
 
 ------------------------------

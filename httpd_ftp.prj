@@ -78,7 +78,6 @@ module.source.files=\
 	gen_todo.pl\
 	ftp_core.c\
 	providers.c\
-	mod_ftp.c\
 	providers/dbm/mod_ftp_dbm.c
 
 module.pixmap.name=.
@@ -118,7 +117,7 @@ module.po.files=
 compiler.options.supports=
 compiler.options.include.paths=\
 	.\
-	..
+	/opt/apache2/include
 compiler.options.library.paths=
 compiler.options.libraries=
 compiler.options.libraries.selected=
