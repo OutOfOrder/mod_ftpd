@@ -75,7 +75,7 @@ install: $(TARGET) install-subdirs
 	echo "*** The mod_ftpd modules have been installed."; \
 	echo "*** Please edit your Apache configuration files and"; \
 	echo "*** add the appropriate LoadModule directives per the documentation"; \
-	echo "*** in Documentation/manual.html"; \
+	echo "*** in docs/manual.html"; \
 	echo "*** If you have previously used a pre 0.12.0 release the module names"; \
 	echo "*** have changed from mod_ftp* to mod_ftpd* And several configuration"; \
 	echo "*** directives have changed their names."; \
