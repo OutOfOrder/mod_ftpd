@@ -3,19 +3,6 @@ Build instructions
 2) make
 3) su -c "make install"
 
-*NOTE* If you are using Apache 2.0.47 or less you may get errors about
-PACKAGE_NAME, PACKAGE_VERSION, etc... being redefined in config.h.. If you do, 
-then you need to edit your ap_config_auto.h in your Apache include file and
-un define or comment out the macros. ie.
-Change
-/* Define to the full name of this package. */
-#define PACKAGE_NAME "httpd"
-To
-/* Define to the full name of this package. */
-/* #define PACKAGE_NAME "httpd" */
-Do that for all of the PACKAGE_* defines (BUGREPORT, NAME, STRING, TARNAME, 
-VERSION).  Apache 2.0.48 does not have those lines so it is safe to remove 
-them.
 
 a sample config entry
 
@@ -32,5 +19,14 @@ Listen 21
 	   AuthName ftp
 	   AuthType Basic
 	   require valid-user
+	   
+	   order allow,deny
+	   allow by all
+	</Directory>
+	<Directory /var/ftp/upload>
+		<LimitExcept STOR STOU>
+			order allow,deny
+			deny by all
+		</Limit>
 	</Directory>
 </VirtualHost>

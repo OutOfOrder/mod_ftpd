@@ -85,10 +85,6 @@
 
 #include "ftp.h"
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 int ftp_methods[FTP_M_LAST];
 
 static request_rec *ftp_create_request(ftp_user_rec *ur)
@@ -190,7 +186,19 @@ static int ftp_init_handler(apr_pool_t *p, apr_pool_t *log, apr_pool_t *ptemp,
 					server_rec *s)
 {
 	/* Register FTP methods */
+	/* the RETR command */
 	ftp_methods[FTP_M_RETR] = ap_method_register(p, "RETR");
+	/* LIST, NLST, SIZE, MDTM */
+	ftp_methods[FTP_M_LIST] = ap_method_register(p, "LIST");
+	/* STOR */
+	ftp_methods[FTP_M_STOR] = ap_method_register(p, "STOR");
+	/* STOU, Separate from STOR for uploads */
+	ftp_methods[FTP_M_STOU] = ap_method_register(p, "STOU");
+	/* DELE */
+	ftp_methods[FTP_M_DELE] = ap_method_register(p, "DELE");
+	/* RNFR, RNTO */
+	ftp_methods[FTP_M_RNTO] = ap_method_register(p, "RNTO");
+	
 
 	/* Add version string to Apache headers */
 	/* TODO: Make coinfigure flag to disable adding in server string */

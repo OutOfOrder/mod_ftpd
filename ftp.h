@@ -62,6 +62,19 @@
 #include "httpd.h"
 #include "util_filter.h"
 
+#ifdef HAVE_CONFIG_H
+/* Undefine these to prevent conflicts between Apache ap_config_auto.h and 
+ * my config.h. Only really needed for Apache < 2.0.48, but it can't hurt.
+ */
+#undef PACKAGE_BUGREPORT
+#undef PACKAGE_NAME
+#undef PACKAGE_STRING
+#undef PACKAGE_TARNAME
+#undef PACKAGE_VERSION
+
+#include "config.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -161,6 +174,11 @@ typedef enum {FTP_AUTH = 1, FTP_USER_ACK = 2, FTP_TRANS_NODATA = 4, FTP_TRANS_DA
 /* FTP methods */
 enum {
 	FTP_M_RETR = 0,
+	FTP_M_LIST,
+	FTP_M_STOR,
+	FTP_M_STOU,
+	FTP_M_DELE,
+	FTP_M_RNTO,
 	FTP_M_LAST
 };
 
@@ -217,6 +235,7 @@ int ap_ftp_handle_type(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_size(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_mdtm(request_rec *r, char *buffer, void *data);
+int ap_ftp_handle_stor(request_rec *r, char *buffer, void *data);
 
 #ifdef __cplusplus
 }

@@ -73,10 +73,9 @@
 #include "scoreboard.h"
 
 #include "ftp.h"
+
 extern int ftp_methods[FTP_M_LAST];
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+
 
 static int ftp_data_socket_close(ftp_user_rec *ur)
 {
@@ -525,6 +524,9 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 	}
 	apr_filepath_merge(&r->uri, ur->current_directory, buffer,
 		APR_FILEPATH_TRUENAME, r->pool);
+	/* Set Method */
+	r->method = apr_pstrdup(r->pool,"LIST");
+	r->method_number = ftp_methods[FTP_M_LIST];
 
 	if (ftp_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY"550 Permission Denied.\r\n");
@@ -656,6 +658,9 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 
 	apr_filepath_merge(&r->uri, ur->current_directory, filename,
 			APR_FILEPATH_TRUENAME, r->pool);
+	/* Set Method */
+	r->method = apr_pstrdup(r->pool,"RETR");
+	r->method_number = ftp_methods[FTP_M_RETR];
 
 	if (ftp_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
@@ -713,6 +718,9 @@ int ap_ftp_handle_size(request_rec *r, char *buffer, void *data)
 		ap_rflush(r);
 		return OK;
 	}
+	/* Set Method */
+	r->method = apr_pstrdup(r->pool,"LIST");
+	r->method_number = ftp_methods[FTP_M_LIST];
 
 	if (ftp_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
@@ -749,6 +757,9 @@ int ap_ftp_handle_mdtm(request_rec *r, char *buffer, void *data)
 		ap_rflush(r);
 		return OK;
 	}
+	/* Set Method */
+	r->method = apr_pstrdup(r->pool,"LIST");
+	r->method_number = ftp_methods[FTP_M_LIST];
 
 	if (ftp_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
@@ -773,4 +784,8 @@ int ap_ftp_handle_mdtm(request_rec *r, char *buffer, void *data)
 	}
 	ap_rflush(r);
 	return OK;
+}
+int ap_ftp_handle_stor(request_rec *r, char *buffer, void *data)
+{
+	return OK;	
 }
