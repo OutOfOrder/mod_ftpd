@@ -1,5 +1,6 @@
 0.8: ?
 	updates scoreboard information for mod_status extended display information
+	reworked method names for ACLs, look at the readme and added CHDIR method
 
 0.7: 2003-12-07
 	EPRT, and EPSV commands implimented for IPV6
