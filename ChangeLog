@@ -1,0 +1,9 @@
+0.5: 2003-11-25
+	Basic FTP server fully implemented..
+	Authentication using Apache Auth Modules
+		use authanon to provide anonymous logins
+	Upload and download support
+	mkdir, rmdir, delete, rename
+	Most Common RFC 959 features supported (unimplemented commands noted in TODO
+	RFC 1123 recoomendations (PASV required, and adjustments from RFC 959)
+	RFC 2389 FEAT, SIZE, and MDTM supported.

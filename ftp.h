@@ -63,7 +63,6 @@
 #include "httpd.h"
 #include "util_filter.h"
 
-
 #if APR_MAJOR_VERSION < 1
 /* With 1.0 apr_socket_create uses the apr_socket_create_ex prototype.. 
  * And apr_socket_create_ex is no more.
@@ -85,6 +84,8 @@
 #include "config.h"
 #endif
 
+#include "mod_ftp.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -100,6 +101,7 @@ typedef struct {
 	int nMaxPort; /* Maximum PASV port to use */
 	int bRealPerms; /* Show real permissionts in file listing */
 	int bAllowPort; /* Whether to allow the PORT command */
+	apr_array_header_t *aChrootOrder; /* Order of chroot querying */
 } ftp_config_rec;
 
 apr_hash_t *ap_ftp_hash;
@@ -164,31 +166,6 @@ apr_hash_t *ap_ftp_hash;
 #define FTP_C_UPLOADFAIL	"553"
 #define FTP_C_RENAMEFAIL	"553"
 
-/* Current Data Pipe state */
-typedef enum {
-	FTP_PIPE_NONE,
-	FTP_PIPE_PASV,
-	FTP_PIPE_PORT,
-	FTP_PIPE_OPEN
-} ftp_pipe_state;
-
-/* connection state */
-typedef enum {
-	FTP_AUTH 			= 0x01,
-	FTP_USER_ACK 		= 0x02,
-	FTP_TRANS_NODATA 	= 0x04,
-	FTP_TRANS_DATA 		= 0x08,
-	FTP_TRANS_RENAME	= 0x10,
-	FTP_NOT_IMPLEMENTED = 0x20,
-	FTP_FEATURE 		= 0x40,
-	FTP_SET_AUTH 		= 0x80
-} ftp_state;
-
-/* All States does not contain FTP_NOT_IMPLEMENTED */
-#define FTP_ALL_STATES FTP_AUTH | FTP_USER_ACK | FTP_TRANS_NODATA | FTP_TRANS_DATA
-/* Transaction state is both DATA and NODATA */
-#define FTP_TRANSACTION (FTP_TRANS_NODATA | FTP_TRANS_DATA)
-
 /* FTP methods */
 enum {
 	FTP_M_RETR = 0,
@@ -202,38 +179,6 @@ enum {
 	FTP_M_RNTO,
 	FTP_M_LAST
 };
-
-typedef struct ftp_datacon_rec {
-	apr_pool_t *p;
-	ftp_pipe_state type;
-	union {
-		apr_socket_t *pasv;
-		apr_sockaddr_t *port;
-	};
-	apr_socket_t *pipe;
-} ftp_datacon_rec;
-
-typedef struct ftp_user_rec {
-    apr_pool_t *p;
-	apr_pool_t *cmdp;
-    conn_rec *c;
-    request_rec *r;
-
-    char *user;
-    char *passwd;
-    char *auth_string;
-
-	char *current_directory;
-
-	int binaryflag;
-	int restart_position;
-	char *rename_file;
-
-	ftp_datacon_rec	data;
-
-    ftp_state state;
-
-} ftp_user_rec;
 
 int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb);
 
@@ -253,7 +198,7 @@ void ap_ftp_register_handler(char *key, ap_ftp_handler *func, int states,
 
 void ap_ftp_str_toupper(char *str);
 
-#define MOD_PREFIX(name) mod_ftp_##name
+#define MOD_PREFIX(name) ftp_##name
 #define MOD_FUNC(name) MOD_PREFIX(name)
 #define MOD_STATIC(type,name) static type MOD_PREFIX(name)
 #define MOD_EXPORT(type,name) type MOD_PREFIX(name)

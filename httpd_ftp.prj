@@ -66,118 +66,9 @@ module.include.name=.
 module.include.type=
 module.include.expanded=1
 module.include.files=\
-	include/ap_compat.h\
-	include/ap_config.h\
-	include/ap_config_auto.h\
-	include/ap_config_layout.h\
-	include/ap_listen.h\
-	include/ap_mmn.h\
-	include/ap_mpm.h\
-	include/ap_provider.h\
-	include/ap_regkey.h\
-	include/ap_release.h\
-	include/apr.h\
-	include/apr_allocator.h\
-	include/apr_anylock.h\
-	include/apr_atomic.h\
-	include/apr_base64.h\
-	include/apr_buckets.h\
-	include/apr_compat.h\
-	include/apr_date.h\
-	include/apr_dbm.h\
-	include/apr_dso.h\
-	include/apr_env.h\
-	include/apr_errno.h\
-	include/apr_file_info.h\
-	include/apr_file_io.h\
-	include/apr_fnmatch.h\
-	include/apr_general.h\
-	include/apr_getopt.h\
-	include/apr_global_mutex.h\
-	include/apr_hash.h\
-	include/apr_hooks.h\
-	include/apr_inherit.h\
-	include/apr_ldap.h\
-	include/apr_ldap_url.h\
-	include/apr_lib.h\
-	include/include/apr_md4.h\
-	include/apr_md5.h\
-	include/apr_mmap.h\
-	include/apr_network_io.h\
-	include/apr_optional.h\
-	include/apr_optional_hooks.h\
-	include/apr_poll.h\
-	include/apr_pools.h\
-	include/apr_portable.h\
-	include/apr_proc_mutex.h\
-	include/apr_queue.h\
-	include/apr_reslist.h\
-	include/apr_ring.h\
-	include/apr_rmm.h\
-	include/apr_sdbm.h\
-	include/apr_sha1.h\
-	include/apr_shm.h\
-	include/apr_signal.h\
-	include/apr_strings.h\
-	include/apr_strmatch.h\
-	include/apr_support.h\
-	include/apr_tables.h\
-	include/apr_thread_cond.h\
-	include/apr_thread_mutex.h\
-	include/apr_thread_proc.h\
-	include/apr_thread_rwlock.h\
-	include/apr_time.h\
-	include/apr_uri.h\
-	include/apr_user.h\
-	include/apr_uuid.h\
-	include/apr_version.h\
-	include/apr_want.h\
-	include/apr_xlate.h\
-	include/apr_xml.h\
-	include/apu.h\
-	include/apu_compat.h\
-	include/apu_version.h\
-	include/apu_want.h\
-	include/http_config.h\
-	include/http_connection.h\
-	include/http_core.h\
-	include/http_log.h\
-	include/http_main.h\
-	include/http_protocol.h\
-	include/http_request.h\
-	include/http_vhost.h\
-	include/httpd.h\
-	include/mod_cgi.h\
-	include/mod_core.h\
-	include/mod_dav.h\
-	include/mod_include.h\
-	include/mod_log_config.h\
-	include/mod_proxy.h\
-	include/mod_ssl.h\
-	include/mpm.h\
-	include/mpm_common.h\
-	include/mpm_default.h\
-	include/os.h\
-	include/pcreposix.h\
-	include/rfc1413.h\
-	include/scoreboard.h\
-	include/ssl_expr.h\
-	include/ssl_expr_parse.h\
-	include/ssl_toolkit_compat.h\
-	include/ssl_util_ssl.h\
-	include/ssl_util_table.h\
-	include/unixd.h\
-	include/util_cfgtree.h\
-	include/util_charset.h\
-	include/util_ebcdic.h\
-	include/util_filter.h\
-	include/util_ldap.h\
-	include/util_md5.h\
-	include/util_script.h\
-	include/util_time.h\
-	include/util_xml.h\
 	ftp.h\
-	server_config.h
+	server_config.h\
+	mod_ftp.h
 
 module.source.name=.
 module.source.type=
@@ -185,7 +76,10 @@ module.source.expanded=1
 module.source.files=\
 	ftp_protocol.c\
 	gen_todo.pl\
-	ftp_core.c
+	ftp_core.c\
+	providers.c\
+	mod_ftp.c\
+	providers/dbm/mod_ftp_dbm.c
 
 module.pixmap.name=.
 module.pixmap.type=
@@ -194,8 +88,14 @@ module.pixmap.files=
 
 module.data.name=.
 module.data.type=
-module.data.expanded=0
-module.data.files=
+module.data.expanded=1
+module.data.files=\
+	Makefile.in\
+	providers/dbm/Makefile.in\
+	configure.ac\
+	providers/dbm/configure.ac\
+	autogen.sh\
+	providers/dbm/autogen.sh
 
 module.help.name=.
 module.help.type=

@@ -128,7 +128,7 @@ static request_rec *ftp_create_request(ftp_user_rec *ur)
     return r;
 }
 
-static void *create_ftp_server_config(apr_pool_t *p, server_rec *s)
+static void *ftp_create_server_config(apr_pool_t *p, server_rec *s)
 {
     ftp_config_rec *pConfig = apr_pcalloc(p, sizeof *pConfig);
 
@@ -137,6 +137,7 @@ static void *create_ftp_server_config(apr_pool_t *p, server_rec *s)
 	pConfig->nMaxPort = 65535;
 	pConfig->bRealPerms = 0;
 	pConfig->bAllowPort = 1;
+	pConfig->aChrootOrder = apr_array_make(p, 1, sizeof(ftp_provider *));
     return pConfig;
 }
 
@@ -166,6 +167,7 @@ static int process_ftp_connection(conn_rec *c)
     ur->state = FTP_AUTH;
 	ur->data.type = FTP_PIPE_NONE;
 
+	ur->chroot = NULL;
 	ur->restart_position = 0;
 	ur->binaryflag = 0;	/* Default is ASCII */
 
@@ -213,7 +215,7 @@ static int ftp_init_handler(apr_pool_t *p, apr_pool_t *log, apr_pool_t *ptemp,
 	return OK;
 }
 
-void ap_ftp_register_handler(char *key, ap_ftp_handler *func, int states,
+FTP_DECLARE(void) ftp_register_handler(char *key, ap_ftp_handler *func, int states,
 							const char *help_text, void *data, apr_pool_t *p)
 {
 	char *dupkey = apr_pstrdup(p, key);
@@ -228,6 +230,7 @@ void ap_ftp_register_handler(char *key, ap_ftp_handler *func, int states,
     apr_hash_set(ap_ftp_hash, dupkey, APR_HASH_KEY_STRING, hand);
 }
 
+
 void ap_ftp_str_toupper(char *str)
 {
 	while (*str) {
@@ -236,10 +239,39 @@ void ap_ftp_str_toupper(char *str)
 	}
 }
 
+
+ftp_user_rec *ftp_get_user_rec(const request_rec *r)
+{
+	return ap_get_module_config(r->request_config, &ftp_module);
+}
+
 /* Include Server ap_set_*_slot functions */
 /* Set Module name for functions */
 #define MODULE_NAME ftp_module
 #include "server_config.h"
+
+static const char *ftp_set_chroot_order(cmd_parms *cmd,
+                                    		 void *struct_ptr,
+                                     		 const char *arg)
+{
+	ftp_provider *addme;
+	const ftp_provider *lookup;
+	ftp_config_rec *pConfig = ap_get_module_config(cmd->server->module_config,
+								&ftp_module);
+
+	const char *err = ap_check_cmd_context(cmd,NOT_IN_DIR_LOC_FILE|NOT_IN_LIMIT);
+	if (err) {
+		return err;
+	}
+
+	addme = apr_array_push(pConfig->aChrootOrder);
+	lookup = ftp_lookup_provider(arg);
+	if (!lookup) {
+		return apr_psprintf(cmd->pool, "Chroot Provider '%s' not loaded", arg);
+	}
+	*addme = *lookup;
+    return NULL;
+}
 
 static void register_hooks(apr_pool_t *p)
 {
@@ -256,123 +288,123 @@ static void register_hooks(apr_pool_t *p)
 */
 /* Everthing below here is registeriny FTP commands handlers */
 /* Authentication Commands */
-    ap_ftp_register_handler("USER", HANDLER_FUNC(user), FTP_AUTH | FTP_USER_ACK,
+    ftp_register_handler("USER", HANDLER_FUNC(user), FTP_AUTH | FTP_USER_ACK,
 		"<sp> username", NULL, p);  
-    ap_ftp_register_handler("PASS", HANDLER_FUNC(passwd), FTP_USER_ACK | FTP_SET_AUTH,
+    ftp_register_handler("PASS", HANDLER_FUNC(passwd), FTP_USER_ACK | FTP_SET_AUTH,
 		"<sp> password", NULL, p);
 	/* TODO: implement Secure AUTH */
-	ap_ftp_register_handler("AUTH", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("AUTH", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* General Commands */
-	ap_ftp_register_handler("QUIT", HANDLER_FUNC(quit), FTP_ALL_STATES,
+	ftp_register_handler("QUIT", HANDLER_FUNC(quit), FTP_ALL_STATES,
 		"(Quits the FTP Session)", NULL, p);
-	ap_ftp_register_handler("HELP", HANDLER_FUNC(help), FTP_TRANSACTION,
+	ftp_register_handler("HELP", HANDLER_FUNC(help), FTP_TRANSACTION,
 		"[ <sp> <command> ]", NULL, p);
-	ap_ftp_register_handler("NOOP", HANDLER_FUNC(NOOP), FTP_TRANSACTION,
+	ftp_register_handler("NOOP", HANDLER_FUNC(NOOP), FTP_TRANSACTION,
 		"", NULL, p);
-	ap_ftp_register_handler("SYST", HANDLER_FUNC(syst), FTP_TRANSACTION,
+	ftp_register_handler("SYST", HANDLER_FUNC(syst), FTP_TRANSACTION,
 		"(Get Type of Operating System)", NULL, p);
-	ap_ftp_register_handler("FEAT", HANDLER_FUNC(help), FTP_TRANSACTION,
+	ftp_register_handler("FEAT", HANDLER_FUNC(help), FTP_TRANSACTION,
 		"(list feature extensions)", (void *)1, p);
 	/* TODO: Store CLNT in UserAgent for logging? */
-	ap_ftp_register_handler("CLNT", HANDLER_FUNC(NOOP), FTP_TRANSACTION,
+	ftp_register_handler("CLNT", HANDLER_FUNC(NOOP), FTP_TRANSACTION,
 		"<sp> Client User Agent", NULL, p);
-	ap_ftp_register_handler("OPTS", NULL, FTP_NOT_IMPLEMENTED,
+	ftp_register_handler("OPTS", NULL, FTP_NOT_IMPLEMENTED,
 		"<sp> command <sp> options", NULL, p);
 
 /* Directory Commands */
-	ap_ftp_register_handler("CWD", HANDLER_FUNC(cd), FTP_TRANSACTION,
+	ftp_register_handler("CWD", HANDLER_FUNC(cd), FTP_TRANSACTION,
 		"[ <sp> directory-name ]", NULL, p);
-	ap_ftp_register_handler("XCWD", HANDLER_FUNC(cd), FTP_TRANSACTION,
+	ftp_register_handler("XCWD", HANDLER_FUNC(cd), FTP_TRANSACTION,
 		"[ <sp> directory-name ]", NULL, p);
-	ap_ftp_register_handler("CDUP", HANDLER_FUNC(cd), FTP_TRANSACTION,
+	ftp_register_handler("CDUP", HANDLER_FUNC(cd), FTP_TRANSACTION,
 		"(Change to Parent Directory)", (void *)1, p);
-	ap_ftp_register_handler("PWD", HANDLER_FUNC(pwd), FTP_TRANSACTION,
+	ftp_register_handler("PWD", HANDLER_FUNC(pwd), FTP_TRANSACTION,
 		"(Returns Current Directory)", NULL, p);
-	ap_ftp_register_handler("XPWD", HANDLER_FUNC(pwd), FTP_TRANSACTION,
+	ftp_register_handler("XPWD", HANDLER_FUNC(pwd), FTP_TRANSACTION,
 		"(Returns Current Directory)", NULL, p);
-	ap_ftp_register_handler("MKD", HANDLER_FUNC(mkdir), FTP_TRANSACTION,
+	ftp_register_handler("MKD", HANDLER_FUNC(mkdir), FTP_TRANSACTION,
 		"<sp> directory-name", NULL, p);
-	ap_ftp_register_handler("XMKD", HANDLER_FUNC(mkdir), FTP_TRANSACTION,
+	ftp_register_handler("XMKD", HANDLER_FUNC(mkdir), FTP_TRANSACTION,
 		"<sp> directory-name", NULL, p);
-	ap_ftp_register_handler("RMD", HANDLER_FUNC(rmdir), FTP_TRANSACTION,
+	ftp_register_handler("RMD", HANDLER_FUNC(rmdir), FTP_TRANSACTION,
 		"<sp> directory-name", NULL, p);
-	ap_ftp_register_handler("XRMD", HANDLER_FUNC(rmdir), FTP_TRANSACTION,
+	ftp_register_handler("XRMD", HANDLER_FUNC(rmdir), FTP_TRANSACTION,
 		"<sp> directory-name", NULL, p);
-	ap_ftp_register_handler("SIZE", HANDLER_FUNC(size), FTP_TRANSACTION | FTP_FEATURE,
+	ftp_register_handler("SIZE", HANDLER_FUNC(size), FTP_TRANSACTION | FTP_FEATURE,
 		"<sp> path-name", NULL, p);
-	ap_ftp_register_handler("MDTM", HANDLER_FUNC(mdtm), FTP_TRANSACTION | FTP_FEATURE,
+	ftp_register_handler("MDTM", HANDLER_FUNC(mdtm), FTP_TRANSACTION | FTP_FEATURE,
 		"<sp> path-name", NULL, p);
 
 /* Transfer mode settings */
 	/* TODO: Support IPV6 PASV hack? */
-	ap_ftp_register_handler("PASV", HANDLER_FUNC(pasv), FTP_TRANSACTION, 
+	ftp_register_handler("PASV", HANDLER_FUNC(pasv), FTP_TRANSACTION, 
 		"(Set Server into Passive Mode)", NULL, p);
 	/* Unfortunatly needed by some old clients */
-	ap_ftp_register_handler("PORT", HANDLER_FUNC(port), FTP_TRANSACTION, 
+	ftp_register_handler("PORT", HANDLER_FUNC(port), FTP_TRANSACTION, 
 		"<sp> h1, h2, h3, h4, p1, p2", NULL, p);
-	ap_ftp_register_handler("TYPE", HANDLER_FUNC(type), FTP_TRANSACTION, 
+	ftp_register_handler("TYPE", HANDLER_FUNC(type), FTP_TRANSACTION, 
 		"<sp> [ A | E | I | L ]", NULL, p);
-	ap_ftp_register_handler("SITE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("SITE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Directory Listing */
 	/* TODO: support listing of a file with LIST */
-	ap_ftp_register_handler("LIST", HANDLER_FUNC(list), FTP_TRANS_DATA, 
+	ftp_register_handler("LIST", HANDLER_FUNC(list), FTP_TRANS_DATA, 
 		"[ <sp> path-name ]", NULL, p);
-	ap_ftp_register_handler("NLST", HANDLER_FUNC(list), FTP_TRANS_DATA,
+	ftp_register_handler("NLST", HANDLER_FUNC(list), FTP_TRANS_DATA,
 		"[ <sp> path-name ]", (void *)1, p);
 
 /* File Rename */
-	ap_ftp_register_handler("RNFR", HANDLER_FUNC(rename), FTP_TRANSACTION,
+	ftp_register_handler("RNFR", HANDLER_FUNC(rename), FTP_TRANSACTION,
 		"<sp> path-name", NULL, p);
-	ap_ftp_register_handler("RNTO", HANDLER_FUNC(rename), FTP_TRANS_RENAME,
+	ftp_register_handler("RNTO", HANDLER_FUNC(rename), FTP_TRANS_RENAME,
 		"<sp> path-name", (void *)1, p);
 
 /* File Transfer */
-	ap_ftp_register_handler("RETR", HANDLER_FUNC(retr), FTP_TRANS_DATA, 
+	ftp_register_handler("RETR", HANDLER_FUNC(retr), FTP_TRANS_DATA, 
 		"<sp> file-name", NULL, p);
-	ap_ftp_register_handler("STOR", HANDLER_FUNC(stor), FTP_TRANS_DATA, 
+	ftp_register_handler("STOR", HANDLER_FUNC(stor), FTP_TRANS_DATA, 
 		"<sp> file-name", NULL, p);
-	ap_ftp_register_handler("APPE", HANDLER_FUNC(stor), FTP_TRANS_DATA,
+	ftp_register_handler("APPE", HANDLER_FUNC(stor), FTP_TRANS_DATA,
 		"<sp> file-name", (void *)1, p);
-	ap_ftp_register_handler("DELE", HANDLER_FUNC(delete), FTP_TRANSACTION,
+	ftp_register_handler("DELE", HANDLER_FUNC(delete), FTP_TRANSACTION,
 		"<sp> file-name", NULL, p);
-	ap_ftp_register_handler("REST", HANDLER_FUNC(restart), FTP_TRANSACTION, 
+	ftp_register_handler("REST", HANDLER_FUNC(restart), FTP_TRANSACTION, 
 		"<sp> offset", NULL, p);
 	/* TODO: implement stou (suggested name upload) */
-	ap_ftp_register_handler("STOU", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("STOU", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Abort/Status Pipelining */
 	/* TODO: implement stat */
-	ap_ftp_register_handler("STAT", NULL, FTP_NOT_IMPLEMENTED, 
+	ftp_register_handler("STAT", NULL, FTP_NOT_IMPLEMENTED, 
 		"[ <sp> path-name ]", NULL, p);
 	/* TODO: Do we need to support ABOR? */
-	ap_ftp_register_handler("ABOR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("ABOR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Extended Commands for IPv6 support */
 	/* TODO: implement EPRT, and EPSV, RFCed IPV6 support */
-	ap_ftp_register_handler("EPRT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
-	ap_ftp_register_handler("EPSV", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("EPRT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("EPSV", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 /*  LONG passive and port */
-	ap_ftp_register_handler("LPRT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
-	ap_ftp_register_handler("LPSV", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("LPRT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("LPSV", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* unknown */
-	ap_ftp_register_handler("PROT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
-	ap_ftp_register_handler("PBSZ", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("PROT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("PBSZ", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Antiquated commands */
-	ap_ftp_register_handler("STRU", HANDLER_FUNC(NOOP), FTP_TRANSACTION,
+	ftp_register_handler("STRU", HANDLER_FUNC(NOOP), FTP_TRANSACTION,
 		"(Specify File Structure) - (Depricated)", "F", p);
-	ap_ftp_register_handler("MODE", HANDLER_FUNC(NOOP), FTP_TRANSACTION,
+	ftp_register_handler("MODE", HANDLER_FUNC(NOOP), FTP_TRANSACTION,
 		"(Specify Transfer Mode) - (Depricated)", "S", p);
-	ap_ftp_register_handler("ALLO", NULL, FTP_NOT_IMPLEMENTED, 
+	ftp_register_handler("ALLO", NULL, FTP_NOT_IMPLEMENTED, 
 		"(Pre-Allocate storage) (Depricated)", NULL, p);
-	ap_ftp_register_handler("SMNT", NULL, FTP_NOT_IMPLEMENTED, 
+	ftp_register_handler("SMNT", NULL, FTP_NOT_IMPLEMENTED, 
 		"(Structured Mount) - (Depricated)", NULL, p);
-	ap_ftp_register_handler("ACCT", NULL, FTP_NOT_IMPLEMENTED, 
+	ftp_register_handler("ACCT", NULL, FTP_NOT_IMPLEMENTED, 
 		"(Depricated)", NULL, p);
-	ap_ftp_register_handler("REIN", NULL, FTP_NOT_IMPLEMENTED, 
+	ftp_register_handler("REIN", NULL, FTP_NOT_IMPLEMENTED, 
 		"(Reinitialize Server State) - (Depricated)", NULL, p);
 }
 
@@ -397,6 +429,9 @@ static const command_rec ftp_cmds[] = {
 				(void *)APR_OFFSETOF(ftp_config_rec, nMaxPort), RSRC_CONF,
 				"Maximum PASV port to use for Data connections. Default: 65535"),
 
+	AP_INIT_ITERATE("FTPChroot", ftp_set_chroot_order,
+				NULL, RSRC_CONF,
+				"List of Chroot prviders to query for chrooting the loging in user. Default: none"),
     { NULL }
 };
 
@@ -405,7 +440,7 @@ module AP_MODULE_DECLARE_DATA ftp_module = {
 	STANDARD20_MODULE_STUFF,
     NULL,                       /* create per-directory config structure */
     NULL,                       /* merge per-directory config structures */
-    create_ftp_server_config,  /* create per-server config structure */
+    ftp_create_server_config,  /* create per-server config structure */
     NULL,                       /* merge per-server config structures */
     ftp_cmds,                  /* command apr_table_t */
     register_hooks              /* register hooks */

@@ -76,7 +76,6 @@
 
 extern int ftp_methods[FTP_M_LAST];
 
-
 static int ftp_data_socket_close(ftp_user_rec *ur)
 {
 	switch (ur->data.type) {
@@ -183,8 +182,7 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
     ftp_handler_st *handle_func;
 	apr_pool_t *handler_p;
 	request_rec *handler_r;
-    ftp_user_rec *ur = ap_get_module_config(r->request_config,
-					&ftp_module);
+    ftp_user_rec *ur = ftp_get_user_rec(r);
 
     //r->uri = apr_pstrdup(r->pool, "ftp:");
 
@@ -246,8 +244,7 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 
 HANDLER_DECLARE(quit)
 {
-    ftp_user_rec *ur = ap_get_module_config(r->request_config,
-					&ftp_module);
+    ftp_user_rec *ur = ftp_get_user_rec(r);
 
     if (ur->state & FTP_TRANSACTION) {
         ap_rprintf(r, FTP_C_GOODBYE"-FTP Statistics go here.\r\n");
@@ -262,8 +259,7 @@ HANDLER_DECLARE(quit)
 HANDLER_DECLARE(user)
 {
 	char *user;
-    ftp_user_rec *ur = ap_get_module_config(r->request_config,
-					&ftp_module);
+    ftp_user_rec *ur = ftp_get_user_rec(r);
 
     user = ap_getword_white_nc(p, &buffer);
     if (!strcmp(user, "")) {
@@ -282,8 +278,11 @@ HANDLER_DECLARE(user)
 HANDLER_DECLARE(passwd)
 {
 	char *passwd;
+	int itr __attribute__ ((unused));
+	const ftp_provider *provider;
 	apr_status_t res;
-	ftp_user_rec *ur = ap_get_module_config(r->request_config,
+	ftp_user_rec *ur = ftp_get_user_rec(r);
+	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
 					&ftp_module);
 
     passwd = apr_psprintf(r->pool, "%s:%s", ur->user,
@@ -295,7 +294,7 @@ HANDLER_DECLARE(passwd)
 
 	if ((res = ftp_check_acl("/", r))!=OK) {
 		ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed: %d\r\n", res);
-		/* Bail out immediatly if this occurs */
+		/* Bail out immediatly if this occurs? */
 		return FTP_QUIT;
 	}
 	
@@ -303,11 +302,31 @@ HANDLER_DECLARE(passwd)
         ap_rprintf(r, FTP_C_LOGINERR" Login incorrect\r\n");
         ap_rflush(r);
         ap_log_rerror(APLOG_MARK, APLOG_ERR|APLOG_NOERRNO, 0, r,
-               "Unauthorized user tried to log in:");
+               "Unauthorized user '%s' tried to log in:", ur->user);
         ur->state = FTP_AUTH;
         return FTP_USER_NOT_ALLOWED;
     }
-	ap_run_auth_checker(r);
+	if ((res = ap_run_auth_checker(r)) != OK) {
+		ap_rprintf(r, FTP_C_LOGINERR" Login denied\r\n");
+		ap_rflush(r);
+        ap_log_rerror(APLOG_MARK, APLOG_ERR|APLOG_NOERRNO, 0, r,
+               "Unauthorized user '%s' tried to log in:", ur->user);
+		return FTP_USER_UNKNOWN;
+	}
+	/* Get chroot mapping */
+	if (!apr_is_empty_array(pConfig->aChrootOrder)) {
+		provider = (ftp_provider *)pConfig->aChrootOrder->elts;
+		for (itr = 0; itr < pConfig->aChrootOrder->nelts; itr++) {
+			if (provider[itr].chroot && provider[itr].chroot->map_chroot) {
+				ur->chroot = provider[itr].chroot->map_chroot(r);
+			} else {
+				ap_log_rerror(APLOG_MARK, APLOG_ERR|APLOG_NOERRNO, 0, r,
+					"Provider '%s' does not provider chroot mapping.",
+					provider->name);
+			}
+		}
+	}
+	/* Report succsessful login */
     ap_rprintf(r, FTP_C_LOGINOK" User %s logged in.\r\n", ur->user);
     ap_rflush(r);
 	ur->current_directory = apr_pstrdup(ur->p,"/");
@@ -317,8 +336,7 @@ HANDLER_DECLARE(passwd)
 
 HANDLER_DECLARE(pwd)
 {
-    ftp_user_rec *ur = ap_get_module_config(r->request_config,
-					&ftp_module);
+    ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	ap_rprintf(r, FTP_C_PWDOK" \"%s\" is current directory.\r\n",ur->current_directory);
 
@@ -331,8 +349,7 @@ HANDLER_DECLARE(cd)
 {
 	char *patharg;  /* incoming directory change */
 	char *newpath;	/* temp space for merged local path */
-    ftp_user_rec *ur = ap_get_module_config(r->request_config,
-					&ftp_module);
+    ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	if ((int)data==1) {
 		patharg = "..";
@@ -461,8 +478,7 @@ HANDLER_DECLARE(pasv)
 	apr_sockaddr_t *listen_addr;
 	apr_port_t port;
 	apr_status_t res;
-	ftp_user_rec *ur = ap_get_module_config(r->request_config,
-					&ftp_module);
+	ftp_user_rec *ur = ftp_get_user_rec(r);
 	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
 					&ftp_module);
 	int bind_retries = 10;
@@ -516,8 +532,7 @@ HANDLER_DECLARE(port)
 {
 	int ip1,ip2,ip3,ip4,p1,p2;
 	char *ipaddr;
-	ftp_user_rec *ur = ap_get_module_config(r->request_config,
-					&ftp_module);
+	ftp_user_rec *ur = ftp_get_user_rec(r);
 	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
 					&ftp_module);
 
@@ -551,8 +566,7 @@ HANDLER_DECLARE(list)
  	char *user, *group;
 	char strtime[16], strperms[11];
 
-    ftp_user_rec *ur = ap_get_module_config(r->request_config,
-					&ftp_module);
+    ftp_user_rec *ur = ftp_get_user_rec(r);
 	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
 					&ftp_module);
 
@@ -689,8 +703,7 @@ HANDLER_DECLARE(list)
 HANDLER_DECLARE(type)
 {
 	char *arg;
-    ftp_user_rec *ur = ap_get_module_config(r->request_config,
-				&ftp_module);
+    ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	arg = apr_pstrdup(p, buffer);
 	ap_str_tolower(arg);
@@ -721,8 +734,7 @@ HANDLER_DECLARE(retr)
 	apr_finfo_t finfo;
 	apr_status_t res;
 
-	ftp_user_rec *ur = ap_get_module_config(r->request_config,
-					&ftp_module);
+	ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	apr_filepath_merge(&r->uri, ur->current_directory, filename,
 			APR_FILEPATH_TRUENAME, r->pool);
@@ -811,8 +823,7 @@ HANDLER_DECLARE(size)
 {
 	apr_finfo_t finfo;
 	char *filename=buffer;
-    ftp_user_rec *ur = ap_get_module_config(r->request_config,
-				&ftp_module);
+    ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	if (apr_filepath_merge(&r->uri,ur->current_directory,filename,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
@@ -851,8 +862,7 @@ HANDLER_DECLARE(mdtm)
 {
 	apr_finfo_t finfo;
 	char *filename=buffer;
-    ftp_user_rec *ur = ap_get_module_config(r->request_config,
-				&ftp_module);
+    ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	if (apr_filepath_merge(&r->uri,ur->current_directory,filename,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
@@ -898,8 +908,7 @@ HANDLER_DECLARE(stor)
     char buff[FTP_IO_BUFFER_MAX];
 	char *sendbuff;
 	char *filename = apr_pstrdup(p, buffer);
-	ftp_user_rec *ur = ap_get_module_config(r->request_config,
-				&ftp_module);
+	ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	if (apr_filepath_merge(&r->uri,ur->current_directory,filename,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
@@ -1000,8 +1009,7 @@ HANDLER_DECLARE(stor)
 HANDLER_DECLARE(rename)
 {
 	apr_finfo_t finfo;
-	ftp_user_rec *ur = ap_get_module_config(r->request_config,
-			&ftp_module);
+	ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	/* Whole filename is in buffer */
 	if (apr_filepath_merge(&r->uri,ur->current_directory, buffer,
@@ -1050,8 +1058,7 @@ HANDLER_DECLARE(rename)
 HANDLER_DECLARE(delete)
 {
 	apr_finfo_t finfo;
-	ftp_user_rec *ur = ap_get_module_config(r->request_config,
-			&ftp_module);
+	ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	/* Whole filename is in buffer */
 	if (apr_filepath_merge(&r->uri,ur->current_directory, buffer,
@@ -1090,8 +1097,7 @@ HANDLER_DECLARE(delete)
 HANDLER_DECLARE(mkdir)
 {
 	apr_status_t res;
-	ftp_user_rec *ur = ap_get_module_config(r->request_config,
-			&ftp_module);
+	ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	/* Whole filename is in buffer */
 	if (apr_filepath_merge(&r->uri,ur->current_directory, buffer,
@@ -1127,8 +1133,7 @@ HANDLER_DECLARE(mkdir)
 HANDLER_DECLARE(rmdir)
 {
 	apr_status_t res;
-	ftp_user_rec *ur = ap_get_module_config(r->request_config,
-			&ftp_module);
+	ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	/* Whole filename is in buffer */
 	if (apr_filepath_merge(&r->uri,ur->current_directory, buffer,
@@ -1158,8 +1163,7 @@ HANDLER_DECLARE(rmdir)
 }
 HANDLER_DECLARE(restart)
 {
-	ftp_user_rec *ur = ap_get_module_config(r->request_config,
-		&ftp_module);
+	ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	ur->restart_position = apr_atoi64(buffer);
 	if (ur->restart_position >= 0) {

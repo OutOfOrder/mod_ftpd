@@ -1,31 +1,21 @@
 # @configure_input@
 
 # Modify these top variables.
-SUBDIRS = 
 SOURCES = \
-	providers.c \
-	mod_ftp.c \
-	ftp_core.c \
-	ftp_protocol.c
+	mod_ftp_dbm.c
 
-HEADERS = \
-	ftp.h \
-	server_config.h \
-	mod_ftp.h
+HEADERS =
 
 CFLAGS = -Wc,-Wall -Wc,-Werror -Wc,-fno-strict-aliasing
 
-INCLUDES =
+INCLUDES = -I../..
 
 LDADD = 
 
-EXTRA_DIST = TODO AUTHORS README NEWS ChangeLog
+EXTRA_DIST = 
 
 TARGET = @PACKAGE_NAME@.la
-
 #Don't modify anything below here
-
-PROVIDERS_SUBDIRS = @subdirs@
 
 srcdir = @srcdir@
 builddir = @builddir@
@@ -48,41 +38,30 @@ STD_DIST = install-sh \
 
 DISTFILES = $(STD_DIST) $(EXTRA_DIST) $(SOURCES) $(HEADERS)
 
-all: $(TARGET) all-subdirs
-
-all-subdirs install-subdirs update-subdirs clean-subdirs distclean-subdirs:
-	@otarget=`echo $@|sed s/-subdirs//`; \
-	list=' $(PROVIDERS_SUBDIRS) $(SUBDIRS)'; \
-	for i in $$list; do \
-		if test -d "$$i"; then \
-			target="$$otarget"; \
-			echo "Making $$target in $$i"; \
-			if test "$$i" = "."; then \
-				made_local=yes; \
-				target="local-$$target"; \
-			fi; \
-			(cd $$i && $(MAKE) $$target) || exit 1; \
-		fi; \
-	done;
-
-TODO: TODO_HEADER $(SOURCES) $(HEADERS)
-	./gen_todo.pl
+all: $(TARGET)
 
 $(TARGET):
-	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(INCLUDES) $(CFLAGS) @DEFS@ $(SOURCES) 
+	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(CFLAGS) $(INCLUDES) @DEFS@ $(SOURCES) 
 
 include:
 	rm -rf include
 	ln -s @APACHE_INCDIR@ include
 
-install: install-subdirs
-	@APXS_BIN@ -i -a -n $(subst mod_,,@PACKAGE_NAME@) $(TARGET)
+install:
+	@APXS_BIN@ -i -a -n $(subst mod_,,@PACKAGE_NAME@) @PACKAGE_NAME@.la
 
-update: update-subdirs
-	@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) $(TARGET)
+update:
+	@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) @PACKAGE_NAME@.la
 
-clean: clean-subdirs
-	$(RM) $(OBJ) $(SLO) $(LO) $(TARGET)
+$(builddir)/.deps: depend
+
+depend: $(SOURCES) $(HEADERS)
+	if test -n "`ls $(srcdir)/*.c 2> /dev/null`"; then \
+		$(CC) -MM -MT $(TARGET) -I@APACHE_INCDIR@ $(INCLUDES) $(srcdir)/*.c > $(builddir)/.deps || true; \
+	fi
+
+clean:
+	$(RM) $(OBJ) $(SLO) $(LO) @PACKAGE_NAME@.la .deps
 
 DESTDIR = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 DESTTGZ = $(DESTDIR).tar.gz
@@ -93,22 +72,14 @@ dist: $(DISTFILES)
 	tar -zcf $(DESTTGZ) $(DESTDIR)
 	rm -rf $(DESTDIR)
 
-distclean: clean distclean-subdirs
+distclean: clean
 	$(RM) TODO config.status config.log config.h config.h.in \
 	configure stamp-h stamp-h.in Makefile
 	$(RM) -r autom4te-2.53.cache
 
-$(builddir)/.deps: depend
-
-depend: $(SOURCES) $(HEADERS)
-	if test -n "`ls $(srcdir)/*.c 2> /dev/null`"; then \
-		$(CC) -MM -MT $(TARGET) -I@APACHE_INCDIR@ $(srcdir)/*.c > $(builddir)/.deps || true; \
-	fi
-
 include $(builddir)/.deps
 
-.PHONY: include all-subdirs update-subdirs install-subdirs \
-	clean-subdirs distclean-subdirs
+.PHONY:
 
 # Regenerate makefiles
 # autoheader might not change config.h.in, so touch a stamp file.

@@ -12,8 +12,6 @@ configure
 conftest
 conftest.c
 conftest.o
-httpd_ftp.prj.bak
-httpd_ftp.pws
 libtool
 ltmain.sh
 Makefile
