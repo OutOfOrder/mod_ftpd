@@ -167,19 +167,13 @@ apr_hash_t *ap_ftp_hash;
 #define FTP_C_UPLOADFAIL	"553"
 #define FTP_C_RENAMEFAIL	"553"
 
-/* TODO: Map these to standard DAV/HTTP methods for simplicity? */
 /* FTP methods */
 enum {
-	FTP_M_RETR,
-	FTP_M_NAVIGATE = 0,
+	FTP_M_CHDIR = 0,
 	FTP_M_LIST,
-	FTP_M_STOR,
 /*	FTP_M_STOU,*/
-	FTP_M_APPE,
-	FTP_M_DELE,
-	FTP_M_XMKD,
+	FTP_M_APPEND,
 	FTP_M_XRMD,
-	FTP_M_RNTO,
 	FTP_M_LAST
 };
 

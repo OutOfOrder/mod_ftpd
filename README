@@ -28,28 +28,28 @@ Listen 21
 	FTPMinPort 1024
 	FTPPaxPort 65535
 	<Directory /var/ftp>
-	   AuthUserFile /usr/local/httpd/ftp
-	    Anonymous_Authoritative oN
-    	AuthAuthoritative Off
-    	Anonymous_NoUserID off
-    	Anonymous_MustGiveEmail off
-    	Anonymous_VerifyEmail off
-    	Anonymous_LogEmail off
-    	Anonymous anonymous guest
-	   AuthName ftp
-	   AuthType Basic
-	   require valid-user
-	   
-	   order allow,deny
-	   allow from all
+		AuthUserFile /usr/local/httpd/ftp
+		Anonymous_Authoritative oN
+		AuthAuthoritative Off
+		Anonymous_NoUserID off
+		Anonymous_MustGiveEmail off
+		Anonymous_VerifyEmail off
+		Anonymous_LogEmail off
+		Anonymous anonymous guest
+		AuthName ftp
+		AuthType Basic
+		require valid-user
+
+		order allow,deny
+		allow from all
 	</Directory>
 	<Location />
-		<LimitExtept LIST RETR>
+		<LimitExtept CHDIR GET LIST>
 			deny from all
 		</LimitExcept>
 	</Location>
 	<Location /upload>
-		<LimitExcept LIST STOR XMKD>
+		<LimitExcept LIST PUT XMKD CHDIR>
 			deny from all
 		</LimitExcept>
 	</Location>
@@ -84,15 +84,16 @@ FTPChroot
 <Limit>
 	To limit what users can and cannot do in directories the Limit and 
 	LimitExcept must be used. Possible parameters for Limit are:
-	  	RETR, LIST, STOR, APPE, DELE, XMKD, XRMD, RNTO
-	RETR: ability to download a file.
-	LIST: ability to get a directory listing.
-	STOR: ability to stor a file.
-	APPE: ability to append to a file (either APPE, or STOR w/ REST).
-	DELE: ability to delete a file.
-	XMKD: ability to make a directory.
-	XRMD: ability to remove a directory.
-	RNTO: ability to rename files and directories.
+	  	CHDIR, GET, LIST, PUT, APPEND, DELETE, MKCOL, XRMD, MOVE
+	CHDIR : ability to change into this directory (required for login)
+	GET   : ability to download a file.
+	LIST  : ability to get a directory listing.
+	PUT   : ability to stor a file.
+	APPEND: ability to append to a file (either APPE, or STOR w/ REST).
+	DELETE: ability to delete a file.
+	MKCOL : ability to make a directory.
+	XRMD  : ability to remove a directory.
+	MOVE  : ability to rename files and directories.
 
 ------------------------------
 IV. 1  FTP DBM Chroot provider
@@ -127,8 +128,6 @@ this branch of Apache.
 
 * Transfered files do NOT go through apache filters and bucket brigades.. When
 I figure them out, I will support that feature.. (dynamic FTP content..)
-
-* IPv6 Support.. It's in there now, need people to test it..
 
 * I have not load tested this at all.. So I do not know how well it will stand
 up to stress testing. Can some people run dkftpbench on this thing?

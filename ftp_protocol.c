@@ -272,7 +272,7 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 			} else if (handle_func->states & FTP_TRANS_RENAME) {
 				ap_rprintf(r, FTP_C_NEEDRNFR" '%s' RNTO requires RNFR first.\r\n", command);
 			} else if (handle_func->states & FTP_TRANS_DATA) {
-				ap_rprintf(r, FTP_C_BADSENDCONN" '%s' Please Specify PASV  or PORT first.\r\n", command);
+				ap_rprintf(r, FTP_C_BADSENDCONN" '%s' Please Specify PASV, PORT, EPRT, EPSV first.\r\n", command);
 			} else if (handle_func->states & FTP_NOT_IMPLEMENTED) {
 				ap_rprintf(r, FTP_C_CMDNOTIMPL" '%s' Command not implemented on this server.\r\n", command);
 			} else {
@@ -402,9 +402,11 @@ HANDLER_DECLARE(passwd)
 	} else {
 		ur->current_directory = apr_pstrdup(ur->p,"/");		
 	}
-
-	r->method = apr_pstrdup(r->pool, "NAVIGATE");
-	r->method_number = ftp_methods[FTP_M_NAVIGATE];
+/* CHDIR as we are changing into the root directory on login 
+ * Probably not a good way to prevent logins but it works 
+ */
+	r->method = apr_pstrdup(r->pool, "CHDIR");
+	r->method_number = ftp_methods[FTP_M_CHDIR];
 
 	if ((res = ftp_check_acl_ex(ur->current_directory, r, 1))!=OK) {
 		ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed\r\n");
@@ -464,8 +466,8 @@ HANDLER_DECLARE(cd)
 		ap_rflush(r);
 		return OK;
 	}
-	r->method = apr_pstrdup(r->pool, "NAVIGATE");
-	r->method_number = ftp_methods[FTP_M_NAVIGATE];
+	r->method = apr_pstrdup(r->pool, "CHDIR");
+	r->method_number = ftp_methods[FTP_M_CHDIR];
 
 	if (ftp_check_acl(newpath, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
@@ -920,8 +922,10 @@ HANDLER_DECLARE(retr)
 	apr_filepath_merge(&r->uri, ur->current_directory, buffer,
 			APR_FILEPATH_TRUENAME, r->pool);
 	/* Set Method */
-	r->method = apr_pstrdup(r->pool,"RETR");
-	r->method_number = ftp_methods[FTP_M_RETR];
+//	r->method = apr_pstrdup(r->pool,"RETR");
+//	r->method_number = ftp_methods[FTP_M_RETR];
+	r->method = apr_pstrdup(r->pool, "GET");
+	r->method_number = M_GET;
 
 	if (ftp_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
@@ -1106,14 +1110,14 @@ HANDLER_DECLARE(stor)
 /* APPEnd, if the APPE command or REST before STOR is used */
 		flags = APR_WRITE | APR_CREATE | APR_APPEND;
 		/* Set Method */
-		r->method = apr_pstrdup(r->pool,"APPE");
-		r->method_number = ftp_methods[FTP_M_APPE];
+		r->method = apr_pstrdup(r->pool,"APPEND");
+		r->method_number = ftp_methods[FTP_M_APPEND];
 	} else {
 /* STORe, error out if the file already exists */
 		flags = APR_WRITE | APR_CREATE | APR_EXCL;
 		/* Set Method */
-		r->method = apr_pstrdup(r->pool,"STOR");
-		r->method_number = ftp_methods[FTP_M_STOR];
+		r->method = apr_pstrdup(r->pool,"PUT");
+		r->method_number = M_PUT;
 	}
 
 	if (ftp_check_acl(NULL, r)!=OK) {
@@ -1213,8 +1217,8 @@ HANDLER_DECLARE(rename)
 		return OK;
 	}
 	/* Set Method */
-	r->method = apr_pstrdup(r->pool,"RNTO");
-	r->method_number = ftp_methods[FTP_M_RNTO];
+	r->method = apr_pstrdup(r->pool,"MOVE");
+	r->method_number = M_MOVE;
 
 	if (ftp_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_RENAMEFAIL" %s: Permission Denied.\r\n", buffer);
@@ -1262,8 +1266,8 @@ HANDLER_DECLARE(delete)
 		return OK;
 	}
 	/* Set Method */
-	r->method = apr_pstrdup(r->pool,"DELE");
-	r->method_number = ftp_methods[FTP_M_DELE];
+	r->method = apr_pstrdup(r->pool,"DELETE");
+	r->method_number = M_DELETE;
 
 	if (ftp_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" %s: Permission Denied.\r\n", buffer);
@@ -1301,8 +1305,8 @@ HANDLER_DECLARE(mkdir)
 		return OK;
 	}
 	/* Set Method */
-	r->method = apr_pstrdup(r->pool,"XMKD");
-	r->method_number = ftp_methods[FTP_M_XMKD];
+	r->method = apr_pstrdup(r->pool,"MKCOL");
+	r->method_number = M_MKCOL;
 
 	if (ftp_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" %s: Permission Denied.\r\n", buffer);

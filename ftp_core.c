@@ -193,26 +193,24 @@ static int ftp_init_handler(apr_pool_t *p, apr_pool_t *log, apr_pool_t *ptemp,
 	ftp_svr_config_rec *pConfig = ap_get_module_config(s->module_config,
 					&ftp_module);
 	/* Register FTP methods */
-	/* Login and the CD command */
-	ftp_methods[FTP_M_NAVIGATE] = ap_method_register(p, "NAVIGATE");
-	/* the RETR command */
-	ftp_methods[FTP_M_RETR] = ap_method_register(p, "RETR");
-	/* LIST, NLST, SIZE, MDTM */
+
+	/* RETR is GET
+	 * STOR is PUT
+	 * Delete is DELETE
+	 * Make directry is MKCOL
+	 * Rename is MOVE
+	 */
+
+	/* Login (CD to root directory) and the CD command */
+	ftp_methods[FTP_M_CHDIR] = ap_method_register(p, "CHDIR");
+	/* LIST, NLST, SIZE, MDTM, STAT (filename) */
 	ftp_methods[FTP_M_LIST] = ap_method_register(p, "LIST");
-	/* STOR */
-	ftp_methods[FTP_M_STOR] = ap_method_register(p, "STOR");
 	/* STOU, Separate from STOR for uploads */
 /*	ftp_methods[FTP_M_STOU] = ap_method_register(p, "STOU");*/
 	/* APPE, Append uploads, and STOR w/ REST */
-	ftp_methods[FTP_M_APPE] = ap_method_register(p, "APPE");
-	/* Delete files */
-	ftp_methods[FTP_M_DELE] = ap_method_register(p, "DELE");
-	/* Make and remove directory */
-	ftp_methods[FTP_M_XMKD] = ap_method_register(p, "XMKD");
+	ftp_methods[FTP_M_APPEND] = ap_method_register(p, "APPEND");
+	/* Remove directory */
 	ftp_methods[FTP_M_XRMD] = ap_method_register(p, "XRMD");
-	/* Rename files */
-	ftp_methods[FTP_M_RNTO] = ap_method_register(p, "RNTO");
-	
 
 	/* Add version string to Apache headers */
 	if (pConfig->bAnnounce) {
