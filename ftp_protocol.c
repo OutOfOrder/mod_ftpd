@@ -222,10 +222,15 @@ static request_rec *ftpd_create_subrequest(request_rec *r, ftpd_user_rec *ur)
 	return rnew;
 }
 
-#define ftpd_check_acl(r) ap_process_request_internal(r)
-/*#define ftpd_check_acl(r) ftpd_check_acl_ex(NULL,r,0)*/
 
-static int ftpd_check_acl_ex(const char *newpath, request_rec *r, int skipauth) 
+typedef enum {
+	FTPD_CHECK_ACL_MAP  = 0x01,
+	FTPD_CHECK_ACL_AUTH = 0x02,
+	FTPD_CHECL_ACL_ALL  = 0x03,
+} ftpd_check_acl_mode;
+
+static int ftpd_check_acl_ex(const char *newpath, request_rec *r, 
+		ftpd_check_acl_mode acl_mode) 
 {
 	apr_status_t res;
 	if (newpath) {
@@ -253,7 +258,7 @@ static int ftpd_check_acl_ex(const char *newpath, request_rec *r, int skipauth)
 		return res;
 	}
 	/* User authentication checks */
-	if (!skipauth) {
+	if ((acl_mode & FTPD_CHECK_ACL_AUTH) == FTPD_CHECK_ACL_AUTH) {
 		if ((res = ap_run_check_user_id(r)) != OK) {
 			return res;
 		}
@@ -503,7 +508,7 @@ HANDLER_DECLARE(passwd)
     if ((res = ap_run_check_user_id(r)) != OK) {
         ap_rprintf(r, FTP_C_LOGINERR" Login incorrect\r\n");
         ap_rflush(r);
-        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
                "Unauthorized user '%s' tried to log in:", ur->user);
         ur->state = FTPD_STATE_AUTH;
         return FTPD_HANDLER_USER_NOT_ALLOWED;
@@ -511,7 +516,7 @@ HANDLER_DECLARE(passwd)
 	if ((res = ap_run_auth_checker(r)) != OK) {
 		ap_rprintf(r, FTP_C_LOGINERR" Login denied\r\n");
 		ap_rflush(r);
-        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
                "Unauthorized user '%s' tried to log in:", ur->user);
 		return FTPD_HANDLER_USER_UNKNOWN;
 	}
@@ -566,7 +571,7 @@ HANDLER_DECLARE(cd)
 	r->method = apr_pstrdup(r->pool, "CHDIR");
 	r->method_number = ftpd_methods[FTPD_M_CHDIR];
 
-	if (ftpd_check_acl(r)!=OK) {
+	if (ap_process_request_internal(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -906,7 +911,7 @@ HANDLER_DECLARE(list)
 		return FTPD_HANDLER_SERVERERROR;
 	}
 
-	if (ftpd_check_acl(r)!=OK) {
+	if (ap_process_request_internal(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		ftpd_data_socket_close(ur);
@@ -1067,7 +1072,7 @@ HANDLER_DECLARE(retr)
 	r->the_request = apr_psprintf(r->pool, "RETR %s", r->uri);
 	ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, r);
 
-	if (ftpd_check_acl(r)!=OK) {
+	if (ap_process_request_internal(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		ftpd_data_socket_close(ur);
@@ -1162,7 +1167,7 @@ HANDLER_DECLARE(size)
 	r->method = apr_pstrdup(r->pool,"LIST");
 	r->method_number = ftpd_methods[FTPD_M_LIST];
 
-	if (ftpd_check_acl(r)!=OK) {
+	if (ap_process_request_internal(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -1202,7 +1207,7 @@ HANDLER_DECLARE(mdtm)
 	r->method = apr_pstrdup(r->pool,"LIST");
 	r->method_number = ftpd_methods[FTPD_M_LIST];
 
-	if (ftpd_check_acl(r)!=OK) {
+	if (ap_process_request_internal(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -1241,9 +1246,7 @@ HANDLER_DECLARE(stor)
 	ftpd_user_rec *ur = ftpd_get_user_rec(r);
 	ftpd_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
 					&ftpd_module);
-/* TODO: find out why the correct per dir config doesn't get imported */
-	ftpd_dir_config_rec *dConfig = ap_get_module_config(r->per_dir_config,
-					&ftpd_module);
+	ftpd_dir_config_rec *dConfig;
 
 	if (strlen(buffer)==0) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid filename.\r\n");
@@ -1268,11 +1271,7 @@ HANDLER_DECLARE(stor)
 		r->the_request = apr_psprintf(r->pool, "APPEND %s", r->uri);
 	} else {
 /* STORe, error out if the file already exists */
-		if (dConfig->bAllowOverwrite) {
-			flags = APR_WRITE | APR_CREATE | APR_TRUNCATE;
-		} else {
-			flags = APR_WRITE | APR_CREATE | APR_EXCL;
-		}
+		flags = APR_WRITE | APR_CREATE | APR_EXCL;
 		/* Set Method */
 		r->method = apr_pstrdup(r->pool,"PUT");
 		r->method_number = M_PUT;
@@ -1280,11 +1279,17 @@ HANDLER_DECLARE(stor)
 	}
 	ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, r);
 
-	if (ftpd_check_acl(r)!=OK) {
+	if (ap_process_request_internal(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		ftpd_data_socket_close(ur);
 		return FTPD_HANDLER_PERMDENY;
+	}
+	/* pull directory configuration AFTER check_acl */
+	dConfig =  ap_get_module_config(r->per_dir_config, &ftpd_module);
+
+	if (!ur->restart_position && ((int)data!=1) && dConfig->bAllowOverwrite) {
+		flags = APR_WRITE | APR_CREATE | APR_TRUNCATE;
 	}
 
 	if ((res = apr_file_open(&fp, r->filename, flags,
@@ -1385,7 +1390,7 @@ HANDLER_DECLARE(rename)
 	r->method = apr_pstrdup(r->pool,"MOVE");
 	r->method_number = M_MOVE;
 
-	if (ftpd_check_acl(r)!=OK) {
+	if (ap_process_request_internal(r)!=OK) {
 		ap_rprintf(r, FTP_C_RENAMEFAIL" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -1438,7 +1443,7 @@ HANDLER_DECLARE(delete)
 	r->method = apr_pstrdup(r->pool,"DELETE");
 	r->method_number = M_DELETE;
 
-	if (ftpd_check_acl(r)!=OK) {
+	if (ap_process_request_internal(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -1481,7 +1486,7 @@ HANDLER_DECLARE(mkdir)
 	r->method = apr_pstrdup(r->pool,"MKCOL");
 	r->method_number = M_MKCOL;
 
-	if (ftpd_check_acl(r)!=OK) {
+	if (ap_process_request_internal(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
@@ -1520,7 +1525,7 @@ HANDLER_DECLARE(rmdir)
 	r->method = apr_pstrdup(r->pool,"XRMD");
 	r->method_number = ftpd_methods[FTPD_M_XRMD];
 
-	if (ftpd_check_acl(r)!=OK) {
+	if (ap_process_request_internal(r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
 		return FTPD_HANDLER_PERMDENY;
