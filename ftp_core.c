@@ -1,4 +1,4 @@
-/* $Id: ftp_core.c,v 1.23 2004/03/10 02:29:05 urkle Exp $ */
+/* $Id$ */
 /* Copyright 2003-2004 Edward Rudd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
