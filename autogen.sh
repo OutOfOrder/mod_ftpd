@@ -1,5 +1,6 @@
 #!/bin/sh
 
-aclocal
-autoconf
-automake -a
+#aclocal
+autoheader-2.53
+autoconf-2.53
+#automake -a

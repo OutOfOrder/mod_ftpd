@@ -139,19 +139,6 @@ static void *create_ftp_server_config(apr_pool_t *p, server_rec *s)
     return pConfig;
 }
 
-static const char *set_ftp_protocol(cmd_parms *cmd, void *dummy, int arg)
-{
-    ftp_config_rec *pConfig = ap_get_module_config(cmd->server->module_config,
-                                               &ftp_module);
-    const char *err = ap_check_cmd_context(cmd,NOT_IN_DIR_LOC_FILE|NOT_IN_LIMIT);
-	if (err) {
-		return err;
-	}
-
-	pConfig->bEnabled = arg;
-    return NULL;
-}
-
 static int process_ftp_connection(conn_rec *c)
 {
     //server_rec *s = c->base_server;
@@ -271,8 +258,11 @@ void ap_ftp_str_toupper(char *str)
 		++str;
 	}
 }
-/* Response code printing function */
-//void ftp_send_response(int code, char *message, );
+
+/* Include Server ap_set_*_slot functions */
+/* Set Module name for functions */
+#define MODULE_NAME ftp_module
+#include "server_config.h"
 
 static void register_hooks(apr_pool_t *p)
 {
@@ -408,20 +398,26 @@ static void register_hooks(apr_pool_t *p)
 }
 
 static const command_rec ftp_cmds[] = {
-    AP_INIT_FLAG("FTPProtocol", set_ftp_protocol, NULL, RSRC_CONF,
+    AP_INIT_FLAG("FTPProtocol", ap_set_server_flag_slot, 
+				(void *)APR_OFFSETOF(ftp_config_rec, bEnabled), RSRC_CONF,
                  "Whether this server is serving the FTP0 protocol. Default: Off"),
-	AP_INIT_FLAG("FTPShowRealPermissions", ap_set_flag_slot,
+
+	AP_INIT_FLAG("FTPShowRealPermissions", ap_set_server_flag_slot,
 				(void *)APR_OFFSETOF(ftp_config_rec, bRealPerms), RSRC_CONF,
                  "Show Real Permissions on files. Default: Off"),
-	AP_INIT_FLAG("FTPAllowActive", ap_set_flag_slot,
+
+	AP_INIT_FLAG("FTPAllowActive", ap_set_server_flag_slot,
 				(void *)APR_OFFSETOF(ftp_config_rec, bAllowPort), RSRC_CONF,
                  "Allow active(PORT) connections on this server. Default: On"),
-	AP_INIT_TAKE1("FTPPasvMinPort", ap_set_int_slot, 
+
+	AP_INIT_TAKE1("FTPPasvMinPort", ap_set_server_int_slot, 
 				(void *)APR_OFFSETOF(ftp_config_rec, nMinPort), RSRC_CONF,
 				"Minimum PASV port to use for Data connections. Default: 1024"),
-	AP_INIT_TAKE1("FTPPasvMaxPort", ap_set_int_slot, 
+
+	AP_INIT_TAKE1("FTPPasvMaxPort", ap_set_server_int_slot, 
 				(void *)APR_OFFSETOF(ftp_config_rec, nMaxPort), RSRC_CONF,
 				"Maximum PASV port to use for Data connections. Default: 65535"),
+
     { NULL }
 };
 

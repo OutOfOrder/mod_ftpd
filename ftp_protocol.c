@@ -143,7 +143,7 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 
         if (!handle_func) {
 			arg = ap_getword_white_nc(r->pool, &buffer);
-            ap_rprintf(r, "500 '%s %s': command not understood\r\n", command, arg);
+            ap_rprintf(r, "500 '%s %s': command not understood.\r\n", command, arg);
             ap_rflush(r);
             invalid_cmd++;
             continue;
@@ -177,7 +177,7 @@ int ap_ftp_handle_quit(request_rec *r, char *buffer, void *data)
 					&ftp_module);
 
     if (ur->state & FTP_TRANSACTION) {
-        ap_rprintf(r, "221-FTP Statistics go here\r\n");
+        ap_rprintf(r, "221-FTP Statistics go here.\r\n");
     }
 	ap_rprintf(r, "221 Goodbye.\r\n");
 
@@ -209,7 +209,6 @@ int ap_ftp_handle_user(request_rec *r, char *buffer, void *data)
 int ap_ftp_handle_passwd(request_rec *r, char *buffer, void *data)
 {
 	char *passwd;
-	int res;
 	ftp_user_rec *ur = ap_get_module_config(r->request_config,
 					&ftp_module);
 	/*ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
@@ -227,9 +226,9 @@ int ap_ftp_handle_passwd(request_rec *r, char *buffer, void *data)
 	ap_run_translate_name(r);
     ap_run_map_to_storage(r);
 
-    if ((res = ap_run_check_user_id(r)) != OK) {
+    if (ap_run_check_user_id(r) != OK) {
         ap_rprintf(r,
-               "530 Login incorrect.%d \r\n", res);
+               "530 Login incorrect\r\n");
         ap_rflush(r);
         ap_log_rerror(APLOG_MARK, APLOG_ERR|APLOG_NOERRNO, 0, r,
                       "Unauthorized user tried to log in");

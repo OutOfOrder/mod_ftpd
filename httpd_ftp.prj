@@ -209,7 +209,7 @@ module.doc.files=\
 	NEWS\
 	AUTHORS\
 	ChangeLog\
-	TODO
+	TODO_HEADER
 
 module.po.expanded=0
 module.po.files=

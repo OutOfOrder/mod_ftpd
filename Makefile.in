@@ -1,0 +1,65 @@
+# @configure_input@
+
+# Modify these top variables.
+SOURCES = \
+	ftp_module.c \
+	ftp_protocol.c
+
+HEADERS = \
+	ftp.h \
+	server_config.h
+
+CFLAGS = -Wall -Werror
+LDADD = 
+EXTRA_DIST = TODO AUTHORS README NEWS ChangeLog
+
+#Don't modify anything below here
+
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+all: @PACKAGE_NAME@.la
+
+OBJ = $(SOURCES:.c=.o)
+
+LO = $(SOURCES:.c=.lo)
+
+SLO = $(SOURCES:.c=.slo)
+
+
+STD_DIST = install-sh missing mkinstalldirs Makefile.in configure.in configure
+
+TODO: TODO_HEADER $(SOURCE) $(HEADERS)
+	./gen_todo.pl
+
+@PACKAGE_NAME@.la : $(SOURCES)
+	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(SOURCES) $(CFLAGS)
+
+install:
+	@APXS_BIN@ -i @PACKAGE_NAME@.la
+
+clean:
+	$(RM) $(OBJ) $(SLO) $(LO) @PACKAGE_NAME@.la
+
+distclean: clean
+	$(RM) TODO config.status config.log config.h config.h.in configure
+
+# Regenerate makefiles
+# autoheader might not change config.h.in, so touch a stamp file.
+$(srcdir)/config.h.in: stamp-h.in
+$(srcdir)/stamp-h.in: configure.ac aclocal.m4
+	cd $(srcdir) && autoheader-2.53
+	echo timestamp > $(srcdir)/stamp-h.in
+
+config.h: stamp-h
+stamp-h: config.h.in config.status
+	./config.status
+
+$(srcdir)/configure: configure.ac aclocal.m4
+	cd $(srcdir) && autoconf-2.53
+
+Makefile: Makefile.in config.status
+	./config.status
+
+config.status: configure
+	./config.status --recheck

@@ -3,5 +3,6 @@ TODO
  * Add in logging
  * Start debugging to get all clients to connect correctly
  * Handing ACL to Apache
+ * Rework Makefile.am/Configure.in to use apxs to compile the module
 
 /* */
