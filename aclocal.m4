@@ -22,7 +22,9 @@ AC_ARG_ENABLE(apachetest, [  --disable-apachetest       Do not try to compile an
 	if test "$APXS_BIN" == "no"; then
 		no_apxs=yes
 	else
-		APACHE_CFLAGS=-I`$APXS_BIN -q INCLUDEDIR`
+		APACHE_INCDIR=`$APXS_BIN -q INCLUDEDIR`
+		APACHE_CFLAGS=-I$APACHE_INCDIR
+		APACHE_MODDIR=`$APXS_BIN -q LIBEXECDIR`
 
 		if test "x$enable_apachetest" = "xyes" ; then
 			ac_save_CFLAGS="$CFLAGS"
@@ -121,5 +123,7 @@ int main(int argc, char *argv[])
 	 	ifelse([$3], , :, [$3])
   	fi
   	AC_SUBST(APACHE_CFLAGS)
+	AC_SUBST(APACHE_INCDIR)
+	AC_SUBST(APACHE_MODDIR)
   	rm -f conf.apachetest
 ])

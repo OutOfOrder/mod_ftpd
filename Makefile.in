@@ -43,6 +43,11 @@ TODO: TODO_HEADER $(SOURCES) $(HEADERS)
 @PACKAGE_NAME@.la : $(SOURCES)
 	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(CFLAGS) @DEFS@ $(SOURCES) 
 
+include:
+	rm -rf include
+	ln -s @APACHE_INCDIR@ include
+.PHONY: include
+
 install:
 	@APXS_BIN@ -i -a -n $(subst mod_,,@PACKAGE_NAME@) @PACKAGE_NAME@.la
 
