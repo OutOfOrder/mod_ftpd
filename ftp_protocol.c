@@ -717,7 +717,7 @@ HANDLER_DECLARE(pasv)
 		"Ipaddr info. %s", ipaddr);
 	/* Argument parsing */
 	if (data) { /* EPSV command */
-		family = apr_atoi64(buffer);
+		family = atoi(buffer);
 		family = (family == 1) ? APR_INET : 
 #		if APR_HAVE_IPV6
 		(family == 2) ? APR_INET6 : 
@@ -849,8 +849,8 @@ HANDLER_DECLARE(port)
 			ap_rflush(r);
 			return FTPD_HANDLER_SERVERERROR;
 		}
-		port = apr_atoi64(strport);
-		family = apr_atoi64(strfamily);
+		port = atoi(strport);
+		family = atoi(strfamily);
 		if (family == 1) {
 			family = APR_INET;
 #if APR_HAVE_IPV6
@@ -1564,7 +1564,7 @@ HANDLER_DECLARE(restart)
 	ftpd_user_rec *ur = ftpd_get_user_rec(r);
 	int rv = FTPD_HANDLER_OK;
 
-	ur->restart_position = apr_atoi64(buffer);
+	ur->restart_position = atoi(buffer);
 	if (ur->restart_position >= 0) {
 		ap_rprintf(r, FTP_C_RESTOK" Restarting at %d. Send RETR or STOR.\r\n", ur->restart_position);
 	} else {
