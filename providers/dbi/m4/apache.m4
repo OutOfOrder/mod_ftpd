@@ -1,3 +1,9 @@
+dnl This file is Copyright 2003,2004 Edward Rudd
+dnl Usage, modification, and distribution of this file in other projects is
+dnl allowed and encouraged so long as this copyright notice is retained.
+dnl You are encouraged to send any patches to the me at 
+dnl eddie <at> omegaware <dot> com, but this is not a requirement
+
 dnl TEST_APACHE_VERSION(RELEASE, [MINIMUM-VERSION [, ACTION-IF-FOUND [, ACTION-IF-NOT-FOUND]]])
 dnl Test for Apache
 dnl
