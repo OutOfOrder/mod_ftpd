@@ -1,5 +1,6 @@
 *.la
 .libs
+.deps
 *.lo
 *.slo
 autom4te-2.53.cache
