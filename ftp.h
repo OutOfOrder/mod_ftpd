@@ -194,11 +194,24 @@ enum {
 	FTP_M_RETR = 0,
 	FTP_M_LIST,
 	FTP_M_STOR,
-	FTP_M_STOU,
+/*	FTP_M_STOU,*/
+	FTP_M_APPE,
 	FTP_M_DELE,
+	FTP_M_XMKD,
+	FTP_M_XRMD,
 	FTP_M_RNTO,
 	FTP_M_LAST
 };
+
+typedef struct ftp_datacon_rec {
+	apr_pool_t *p;
+	ftp_pipe_state type;
+	union {
+		apr_socket_t *pasv;
+		apr_sockaddr_t *port;
+	};
+	apr_socket_t *pipe;
+} ftp_datacon_rec;
 
 typedef struct ftp_user_rec {
     apr_pool_t *p;
@@ -213,18 +226,10 @@ typedef struct ftp_user_rec {
 	char *current_directory;
 
 	int binaryflag;
-
+	int restart_position;
 	char *rename_file;
 
-	struct {
-		apr_pool_t *p;
-		ftp_pipe_state type;
-		union {
-			apr_socket_t *pasv;
-			apr_sockaddr_t *port;
-		};
-		apr_socket_t *pipe;
-	} data;
+	ftp_datacon_rec	data;
 
     ftp_state state;
 
@@ -279,6 +284,10 @@ HANDLER_DECLARE(size);
 HANDLER_DECLARE(mdtm);
 HANDLER_DECLARE(stor);
 HANDLER_DECLARE(rename);
+HANDLER_DECLARE(delete);
+HANDLER_DECLARE(mkdir);
+HANDLER_DECLARE(rmdir);
+HANDLER_DECLARE(restart);
 
 #ifdef __cplusplus
 }

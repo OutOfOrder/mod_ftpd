@@ -64,7 +64,7 @@ preferences.help.browser=devhelp -s '$(current.file.selection)'
 
 module.include.name=.
 module.include.type=
-module.include.expanded=0
+module.include.expanded=1
 module.include.files=\
 	include/ap_compat.h\
 	include/ap_config.h\

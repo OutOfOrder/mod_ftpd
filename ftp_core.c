@@ -166,6 +166,7 @@ static int process_ftp_connection(conn_rec *c)
     ur->state = FTP_AUTH;
 	ur->data.type = FTP_PIPE_NONE;
 
+	ur->restart_position = 0;
 	ur->binaryflag = 0;	/* Default is ASCII */
 
     bb = apr_brigade_create(ur->p, c->bucket_alloc);
@@ -194,15 +195,20 @@ static int ftp_init_handler(apr_pool_t *p, apr_pool_t *log, apr_pool_t *ptemp,
 	/* STOR */
 	ftp_methods[FTP_M_STOR] = ap_method_register(p, "STOR");
 	/* STOU, Separate from STOR for uploads */
-	ftp_methods[FTP_M_STOU] = ap_method_register(p, "STOU");
-	/* DELE */
+/*	ftp_methods[FTP_M_STOU] = ap_method_register(p, "STOU");*/
+	/* APPE, Append uploads, and STOR w/ REST */
+	ftp_methods[FTP_M_APPE] = ap_method_register(p, "APPE");
+	/* Delete files */
 	ftp_methods[FTP_M_DELE] = ap_method_register(p, "DELE");
-	/* RNFR, RNTO */
+	/* Make and remove directory */
+	ftp_methods[FTP_M_XMKD] = ap_method_register(p, "XMKD");
+	ftp_methods[FTP_M_XRMD] = ap_method_register(p, "XRMD");
+	/* Rename files */
 	ftp_methods[FTP_M_RNTO] = ap_method_register(p, "RNTO");
 	
 
 	/* Add version string to Apache headers */
-	/* TODO: Make coinfigure flag to disable adding in server string */
+	/* TODO: Make configure flag to disable adding in server string */
 	ap_add_version_component(p, PACKAGE_NAME"/"PACKAGE_VERSION);
 	return OK;
 }
@@ -285,15 +291,13 @@ static void register_hooks(apr_pool_t *p)
 		"(Returns Current Directory)", NULL, p);
 	ap_ftp_register_handler("XPWD", HANDLER_FUNC(pwd), FTP_TRANSACTION,
 		"(Returns Current Directory)", NULL, p);
-	/* TODO: implement mkdir */
-	ap_ftp_register_handler("MKD", NULL, FTP_NOT_IMPLEMENTED,
+	ap_ftp_register_handler("MKD", HANDLER_FUNC(mkdir), FTP_TRANSACTION,
 		"<sp> directory-name", NULL, p);
-	ap_ftp_register_handler("XMKD", NULL, FTP_NOT_IMPLEMENTED,
+	ap_ftp_register_handler("XMKD", HANDLER_FUNC(mkdir), FTP_TRANSACTION,
 		"<sp> directory-name", NULL, p);
-	/* TODO: implement rmdir */
-	ap_ftp_register_handler("RMD", NULL, FTP_NOT_IMPLEMENTED,
+	ap_ftp_register_handler("RMD", HANDLER_FUNC(rmdir), FTP_TRANSACTION,
 		"<sp> directory-name", NULL, p);
-	ap_ftp_register_handler("XRMD", NULL, FTP_NOT_IMPLEMENTED,
+	ap_ftp_register_handler("XRMD", HANDLER_FUNC(rmdir), FTP_TRANSACTION,
 		"<sp> directory-name", NULL, p);
 	ap_ftp_register_handler("SIZE", HANDLER_FUNC(size), FTP_TRANSACTION | FTP_FEATURE,
 		"<sp> path-name", NULL, p);
@@ -321,7 +325,7 @@ static void register_hooks(apr_pool_t *p)
 /* File Rename */
 	ap_ftp_register_handler("RNFR", HANDLER_FUNC(rename), FTP_TRANSACTION,
 		"<sp> path-name", NULL, p);
-	ap_ftp_register_handler("RNTO", HANDLER_FUNC(rename), FTP_TRANSACTION,
+	ap_ftp_register_handler("RNTO", HANDLER_FUNC(rename), FTP_TRANS_RENAME,
 		"<sp> path-name", (void *)1, p);
 
 /* File Transfer */
@@ -329,11 +333,12 @@ static void register_hooks(apr_pool_t *p)
 		"<sp> file-name", NULL, p);
 	ap_ftp_register_handler("STOR", HANDLER_FUNC(stor), FTP_TRANS_DATA, 
 		"<sp> file-name", NULL, p);
-	/* TODO: implement and append */
-	ap_ftp_register_handler("APPE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
-	ap_ftp_register_handler("DELE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
-	/* TODO: implement restore */
-	ap_ftp_register_handler("REST", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ap_ftp_register_handler("APPE", HANDLER_FUNC(stor), FTP_TRANS_DATA,
+		"<sp> file-name", (void *)1, p);
+	ap_ftp_register_handler("DELE", HANDLER_FUNC(delete), FTP_TRANSACTION,
+		"<sp> file-name", NULL, p);
+	ap_ftp_register_handler("REST", HANDLER_FUNC(restart), FTP_TRANSACTION, 
+		"<sp> offset", NULL, p);
 	/* TODO: implement stou (suggested name upload) */
 	ap_ftp_register_handler("STOU", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
@@ -374,11 +379,11 @@ static void register_hooks(apr_pool_t *p)
 static const command_rec ftp_cmds[] = {
     AP_INIT_FLAG("FTPProtocol", ap_set_server_flag_slot, 
 				(void *)APR_OFFSETOF(ftp_config_rec, bEnabled), RSRC_CONF,
-                 "Whether this server is serving the FTP0 protocol. Default: Off"),
+                 "Whether this server is serving the FTP protocol. Default: Off"),
 
 	AP_INIT_FLAG("FTPShowRealPermissions", ap_set_server_flag_slot,
 				(void *)APR_OFFSETOF(ftp_config_rec, bRealPerms), RSRC_CONF,
-                 "Show Real Permissions on files. Default: Off"),
+                 "Show Real Permissions of files. Default: Off"),
 
 	AP_INIT_FLAG("FTPAllowActive", ap_set_server_flag_slot,
 				(void *)APR_OFFSETOF(ftp_config_rec, bAllowPort), RSRC_CONF,
