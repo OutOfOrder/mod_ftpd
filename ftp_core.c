@@ -165,16 +165,12 @@ static int process_ftp_connection(conn_rec *c)
 	/* TODO: Create ASCII Filter for command output and TYPE A retreival to replace *hack* function */
 /*	ap_add_output_filter("FTP_COMMAND_OUTPUT",NULL,NULL,c);*/
 	apr_pool_create(&p, c->pool);
-    ur = apr_palloc(p, sizeof(*ur));
+    ur = apr_pcalloc(p, sizeof(*ur));
     ur->p = p;
 	apr_pool_create(&ur->data.p, ur->p);
     ur->c = c;
     ur->state = FTP_AUTH;
 	ur->data.type = FTP_PIPE_NONE;
-
-	ur->chroot = NULL;
-	ur->restart_position = 0;
-	ur->binaryflag = 0;	/* Default is ASCII */
 
     bb = apr_brigade_create(ur->p, c->bucket_alloc);
 
@@ -197,6 +193,8 @@ static int ftp_init_handler(apr_pool_t *p, apr_pool_t *log, apr_pool_t *ptemp,
 	ftp_svr_config_rec *pConfig = ap_get_module_config(s->module_config,
 					&ftp_module);
 	/* Register FTP methods */
+	/* Login and the CD command */
+	ftp_methods[FTP_M_NAVIGATE] = ap_method_register(p, "NAVIGATE");
 	/* the RETR command */
 	ftp_methods[FTP_M_RETR] = ap_method_register(p, "RETR");
 	/* LIST, NLST, SIZE, MDTM */
@@ -345,10 +343,10 @@ static void register_hooks(apr_pool_t *p)
 /* Authentication Commands */
     ftp_register_handler("USER", HANDLER_FUNC(user), FTP_AUTH | FTP_USER_ACK,
 		"<sp> username", NULL, p);  
-    ftp_register_handler("PASS", HANDLER_FUNC(passwd), FTP_USER_ACK | FTP_SET_AUTH,
+    ftp_register_handler("PASS", HANDLER_FUNC(passwd), FTP_USER_ACK | FTP_HIDE_ARGS,
 		"<sp> password", NULL, p);
 	/* TODO: implement Secure AUTH */
-	ftp_register_handler("AUTH", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ftp_register_handler("AUTH", NULL, FTP_NOT_IMPLEMENTED | FTP_HIDE_ARGS, NULL, NULL, p);
 
 /* General Commands */
 	ftp_register_handler("QUIT", HANDLER_FUNC(quit), FTP_ALL_STATES,
@@ -392,12 +390,12 @@ static void register_hooks(apr_pool_t *p)
 		"<sp> path-name", NULL, p);
 
 /* Transfer mode settings */
-	ftp_register_handler("PASV", HANDLER_FUNC(pasv), FTP_TRANSACTION, 
+	ftp_register_handler("PASV", HANDLER_FUNC(pasv), FTP_TRANSACTION | FTP_EPSV_LOCK,
 		"(Set Server into Passive Mode)", NULL, p);
 	/* Unfortunatly needed by some old clients */
-	ftp_register_handler("PORT", HANDLER_FUNC(port), FTP_TRANSACTION, 
+	ftp_register_handler("PORT", HANDLER_FUNC(port), FTP_TRANSACTION | FTP_EPSV_LOCK,
 		"<sp> h1, h2, h3, h4, p1, p2", NULL, p);
-	ftp_register_handler("TYPE", HANDLER_FUNC(type), FTP_TRANSACTION, 
+	ftp_register_handler("TYPE", HANDLER_FUNC(type), FTP_TRANSACTION,
 		"<sp> [ A | E | I | L ]", NULL, p);
 	ftp_register_handler("SITE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
@@ -436,7 +434,7 @@ static void register_hooks(apr_pool_t *p)
 	ftp_register_handler("ABOR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Extended Commands for IPv6 support */
-	ftp_register_handler("EPRT", HANDLER_FUNC(port), FTP_TRANSACTION,
+	ftp_register_handler("EPRT", HANDLER_FUNC(port), FTP_TRANSACTION | FTP_EPSV_LOCK,
 		"<sp> |af|addr|port|", (void *)1, p);
 	ftp_register_handler("EPSV", HANDLER_FUNC(pasv), FTP_TRANSACTION,
 		"[ <sp> af|ALL]", (void *)1, p);

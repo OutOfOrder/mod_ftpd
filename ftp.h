@@ -113,12 +113,6 @@ apr_hash_t *ap_ftp_hash;
 #define FTP_STRING_LENGTH 255
 #define FTP_IO_BUFFER_MAX 262144 /*524288 1048576 */
 
-/* Handler return codes */
-#define FTP_QUIT                1
-#define FTP_USER_UNKNOWN        2
-#define FTP_USER_NOT_ALLOWED    3
-#define FTP_UPDATE_AUTH			4
-
 /* FTP Return codes: Shamelessly borrowed from vsftp/ftpcodes.h */
 #define FTP_C_DATACONN		"150"
 
@@ -173,9 +167,11 @@ apr_hash_t *ap_ftp_hash;
 #define FTP_C_UPLOADFAIL	"553"
 #define FTP_C_RENAMEFAIL	"553"
 
+/* TODO: Map these to standard DAV/HTTP methods for simplicity? */
 /* FTP methods */
 enum {
-	FTP_M_RETR = 0,
+	FTP_M_RETR,
+	FTP_M_NAVIGATE = 0,
 	FTP_M_LIST,
 	FTP_M_STOR,
 /*	FTP_M_STOU,*/

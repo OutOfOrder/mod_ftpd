@@ -165,6 +165,9 @@ static int ftp_check_acl_ex(const char *newpath, request_rec *r, int skipauth)
 		r->uri = apr_pstrdup(r->pool, newpath);
 	} // else assume uri has already been updated
 
+	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+		"Checking Method: %s (%d)", r->method, r->method_number);
+
 	if ((res = ap_location_walk(r)) != OK) {
 		return res;
 	}
@@ -257,16 +260,21 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
             invalid_cmd++;
             continue;
         }
-        if (!(handle_func->states & ur->state)) {
+		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+			"handler state: %X, epsv mode: %d", handle_func->states, ur->epsv_lock);
+        if (!(handle_func->states & ur->state)
+				|| ((handle_func->states & FTP_EPSV_LOCK) && ur->epsv_lock) ) {
 			if ((ur->state == FTP_AUTH)||(ur->state == FTP_USER_ACK)) {
 				ur->state = FTP_AUTH;
-				ap_rprintf(r, FTP_C_LOGINERR" '%s' Please login with USER and PASS.\r\n",command);
+				ap_rprintf(r, FTP_C_LOGINERR" '%s' Please login with USER and PASS.\r\n", command);
+			} else if ((handle_func->states & FTP_EPSV_LOCK) &&  ur->epsv_lock) {
+				ap_rprintf(r, FTP_C_BADSENDCONN" EPSV ALL mode in effect command %s disabled.\r\n", command);
 			} else if (handle_func->states & FTP_TRANS_RENAME) {
-				ap_rprintf(r, FTP_C_NEEDRNFR" '%s' RNTO requires RNFR first.\r\n",command);
+				ap_rprintf(r, FTP_C_NEEDRNFR" '%s' RNTO requires RNFR first.\r\n", command);
 			} else if (handle_func->states & FTP_TRANS_DATA) {
-				ap_rprintf(r, FTP_C_BADSENDCONN" '%s' Please Specify PASV  or PORT first.\r\n",command);
+				ap_rprintf(r, FTP_C_BADSENDCONN" '%s' Please Specify PASV  or PORT first.\r\n", command);
 			} else if (handle_func->states & FTP_NOT_IMPLEMENTED) {
-				ap_rprintf(r, FTP_C_CMDNOTIMPL" '%s' Command not implemented on this server.\r\n",command);
+				ap_rprintf(r, FTP_C_CMDNOTIMPL" '%s' Command not implemented on this server.\r\n", command);
 			} else {
             	ap_rprintf(r, "500 '%s': command not allowed in this state\r\n", command);
 			}
@@ -277,7 +285,12 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 		handler_r = ftp_create_subrequest(r,ur);
 
 		ap_ftp_str_toupper(command);
-		handler_r->the_request = apr_psprintf(handler_r->pool, "%s %s", command, buffer);
+
+		if (handle_func->states & FTP_HIDE_ARGS) {
+			handler_r->the_request = apr_pstrdup(handler_r->pool, command);
+		} else {
+			handler_r->the_request = apr_psprintf(handler_r->pool, "%s %s", command, buffer);
+		}
 
 		ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, handler_r);
 
@@ -349,8 +362,7 @@ HANDLER_DECLARE(passwd)
                                    ap_pbase64encode(r->pool, passwd)); 
 	r->user = apr_pstrdup(r->pool, ur->user);
     apr_table_set(r->headers_in, "Authorization", ur->auth_string);
-	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-		"Current method:%s", r->method);
+
 	/* Get chroot mapping */
 	if (!apr_is_empty_array(pConfig->aChrootOrder)) {
 		provider = (ftp_provider *)pConfig->aChrootOrder->elts;
@@ -390,6 +402,9 @@ HANDLER_DECLARE(passwd)
 	} else {
 		ur->current_directory = apr_pstrdup(ur->p,"/");		
 	}
+
+	r->method = apr_pstrdup(r->pool, "NAVIGATE");
+	r->method_number = ftp_methods[FTP_M_NAVIGATE];
 
 	if ((res = ftp_check_acl_ex(ur->current_directory, r, 1))!=OK) {
 		ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed\r\n");
@@ -449,8 +464,9 @@ HANDLER_DECLARE(cd)
 		ap_rflush(r);
 		return OK;
 	}
-	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-		"Current method:%s", r->method);
+	r->method = apr_pstrdup(r->pool, "NAVIGATE");
+	r->method_number = ftp_methods[FTP_M_NAVIGATE];
+
 	if (ftp_check_acl(newpath, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
@@ -583,8 +599,8 @@ HANDLER_DECLARE(pasv)
 	/* Argument parsing */
 	if (data) { /* EPSV command */
 		family = apr_atoi64(buffer);
-		if (apr_strnatcmp(buffer,"ALL")==0) {
-			ur->flags |= FTP_EPSV_LOCK;;
+		if (apr_strnatcasecmp(buffer,"ALL")==0) {
+			ur->epsv_lock = 1;
 		} else if ( (family==1 && local_addr->family!=1)
 				|| (family==2 && local_addr->family!=2)) {
 			ap_rprintf(r, FTP_C_INVALID_PROTO" not same protocol as connection, use (%d)\r\n",
