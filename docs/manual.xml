@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet href="/xslt/docbook.css" type="text/css"?>
-<!DOCTYPE article PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN" "/usr/share/sgml/docbook/xml-dtd-4.1.2-1.0-8/docbookx.dtd">
+<!DOCTYPE article PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN" "/usr/share/sgml/docbook/xml-dtd-4.1.2-1.0-8/docbookx.dtd" [
+<!ENTITY contactemail "urkle@outoforder.cc">
+]>
 <article>
   <articleinfo>
     <title>mod_ftpd Manual</title>
@@ -8,7 +10,7 @@
       <firstname>Edward</firstname>
       <surname>Rudd</surname>
       <affiliation>
-        <address format="linespecific"><email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email></address>
+        <address format="linespecific"><email>&contactemail;</email></address>
       </affiliation>
     </author>
     <copyright>
@@ -52,11 +54,11 @@
     </sect2>
     <sect2 id="feedback">
       <title>Feedback</title>
-      <para>Feedback is most certainly welcome for this document. Send your additions, comments and criticisms to the following email address : <email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email>. </para>
+      <para>Feedback is most certainly welcome for this document. Send your additions, comments and criticisms to the following email address : <email>&contactemail;</email>. </para>
     </sect2>
     <sect2 id="translations">
       <title>Translations</title>
-      <para>Currently I there are no translations of this document. However if you would like to translate this document into other languages please do so and submit them to this email address : <email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email>.</para>
+      <para>Currently I there are no translations of this document. However if you would like to translate this document into other languages please do so and submit them to this email address : <email>&contactemail;</email>.</para>
     </sect2>
   </sect1>
   <sect1 id="compiling">
@@ -407,7 +409,7 @@ Listen 21
   </sect1>
   <sect1 id="issues">
     <title>Knwon issues and limitations</title>
-    <para>These are some of the known issues and limitations of the module. Also check the <filename>TODO</filename> file for any issues that did not make their way into this document. And of course, if you feel the urge to actually implement something on my <filename>TODO</filename> list feel free to submit a unified diff patch to the following email address : <email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email>.</para>
+    <para>These are some of the known issues and limitations of the module. Also check the <filename>TODO</filename> file for any issues that did not make their way into this document. And of course, if you feel the urge to actually implement something on my <filename>TODO</filename> list feel free to submit a unified diff patch to the following email address : <email>&contactemail;</email>.</para>
     <itemizedlist>
       <listitem>
         <para>This module has been build using <application>Apache</application> 2.0.48. I have had people test it on 2.0.47 and 2.1 CVS HEAD.. But I have not officially tested it on 2.1 yet. When an official release of 2.1 is out, then I will test and modify my module for this branch of <application>Apache</application>.</para>
@@ -449,7 +451,7 @@ Listen 21
         <para>My website <ulink url="http://www.outoforder.cc/">http://www.outoforder.cc/</ulink>.</para>
       </listitem>
       <listitem>
-        <para>email: <email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email></para>
+        <para>email: <email>&contactemail;</email></para>
       </listitem>
     </itemizedlist>
     <para>Please use a meaningful subject line for e-mail, otherwise your e-mail may be silently deposited in my junk mail folder by my <acronym>SPAM</acronym> filters and possibly never seen by me. Use something like "mod_ftpd patch to implement feature X" would be quite acceptable, however, "PLEASE READ THIS NOW" is quite unacceptable and will most likely never be read.</para>
