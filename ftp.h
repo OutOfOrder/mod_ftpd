@@ -76,6 +76,7 @@ typedef struct {
 	int nMinPort; /* Minimum PASV port to use */
 	int nMaxPort; /* Maximum PASV port to use */
 	int bRealPerms; /* Show real permissionts in file listing */
+	int bAllowPort; /* Whether to allow the PORT command */
 } ftp_config_rec;
 
 apr_hash_t *ap_ftp_hash;
@@ -95,14 +96,18 @@ typedef struct ftp_handler_st {
 #define FTP_USER_UNKNOWN        2
 #define FTP_USER_NOT_ALLOWED    3
 
-typedef enum {FTP_AUTH = 1, FTP_USER_ACK = 2, FTP_TRANS_NOPASV = 4, FTP_TRANS_PASV = 8, FTP_NOT_IMPLEMENTED = 16} ftp_state;
+/* Current Data Pipe state */
+typedef enum { FTP_PIPE_NONE, FTP_PIPE_PASV, FTP_PIPE_PORT, FTP_PIPE_OPEN} ftp_pipe_state;
+
+/* connection state */
+typedef enum {FTP_AUTH = 1, FTP_USER_ACK = 2, FTP_TRANS_NODATA = 4, FTP_TRANS_DATA = 8, FTP_NOT_IMPLEMENTED = 16} ftp_state;
 /* All States does not contain FTP_NOT_IMPLEMENTED */
-#define FTP_ALL_STATES FTP_AUTH | FTP_USER_ACK | FTP_TRANS_NOPASV | FTP_TRANS_PASV
-#define FTP_TRANSACTION (FTP_TRANS_NOPASV | FTP_TRANS_PASV)
+#define FTP_ALL_STATES FTP_AUTH | FTP_USER_ACK | FTP_TRANS_NODATA | FTP_TRANS_DATA
+/* Transaction state is both DATA and NODATA */
+#define FTP_TRANSACTION (FTP_TRANS_NODATA | FTP_TRANS_DATA)
 
 typedef struct ftp_user_rec {
     apr_pool_t *p;
-	apr_pool_t *datapool; /* pool for Data sockets */
     conn_rec *c;
     request_rec *r;
 
@@ -112,7 +117,15 @@ typedef struct ftp_user_rec {
 
 	char *current_directory;
 	int binaryflag;
-	apr_socket_t *passive_socket;
+	struct {
+		ftp_pipe_state type;
+		apr_pool_t *p;
+		union {
+			apr_socket_t *pasv;
+			apr_sockaddr_t *port;
+		};
+		apr_socket_t *pipe;
+	} data;
 
     ftp_state state;
 
@@ -140,6 +153,7 @@ int ap_ftp_handle_help(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_syst(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_NOOP(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data);
+int ap_ftp_handle_port(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_list(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_type(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data);

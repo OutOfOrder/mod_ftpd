@@ -8,10 +8,10 @@ a sample config entry
 Listen 21
 <VirtualHost *:21>
 	FTPprotocol on
-	FTPDocumentRoot /tmp/ftp
+	DocumentRoot /var/ftp
 	FTPMinPort 1024
 	FTPPaxPort 65535
-	<Directory /tmp/ftp>
+	<Directory /var/ftp>
 	   AuthDBMUserFile /usr/local/httpd/ftp
 	   AuthName ftp
 	   AuthType Basic

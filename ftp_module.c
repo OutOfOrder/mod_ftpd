@@ -118,11 +118,10 @@ static void *create_ftp_server_config(apr_pool_t *p, server_rec *s)
     ftp_config_rec *pConfig = apr_pcalloc(p, sizeof *pConfig);
 
     pConfig->bEnabled = 0;
-	/* Should just use DocumentRoot */
-	pConfig->sFtpRoot = DOCUMENT_LOCATION;  /* Probably a BAD default */
 	pConfig->nMinPort = 1024;
 	pConfig->nMaxPort = 65535;
 	pConfig->bRealPerms = 0;
+	pConfig->bAllowPort = 1;
     return pConfig;
 }
 
@@ -139,7 +138,7 @@ static const char *set_ftp_protocol(cmd_parms *cmd, void *dummy, int arg)
     return NULL;
 }
 
-static const char *set_ftp_docroot(cmd_parms *cmd, void *dummy, char *arg)
+/*static const char *set_ftp_docroot(cmd_parms *cmd, void *dummy, char *arg)
 {
     ftp_config_rec *pConfig = ap_get_module_config(cmd->server->module_config,
                                                &ftp_module);
@@ -153,9 +152,6 @@ static const char *set_ftp_docroot(cmd_parms *cmd, void *dummy, char *arg)
 		return "FTPDocumentRoot must be a directory";
 	}
     return NULL;
-}
-/*static const char *set_ftp_portrange(cmd_parms *cmd, void *dummy, char *arg)
-{
 }*/
 
 static int process_ftp_connection(conn_rec *c)
@@ -173,14 +169,15 @@ static int process_ftp_connection(conn_rec *c)
     }
 
 	ap_update_child_status(c->sbh, SERVER_BUSY_READ, NULL);
-	//OutPut Filter? ap_add_output_filter("FTP_OUTPUT",NULL,NULL,c);
+	ap_add_output_filter("FTP_COMMAND_OUTPUT",NULL,NULL,c);
 	apr_pool_create(&p, c->pool);
     ur = apr_palloc(p, sizeof(*ur));
     ur->p = p;
-	apr_pool_create(&ur->datapool, ur->p);
+	apr_pool_create(&ur->data.p, ur->p);
     ur->c = c;
     ur->state = FTP_AUTH;
-	ur->passive_socket = NULL;
+	ur->data.type = FTP_PIPE_NONE;
+
 	ur->binaryflag = 0;	/* Default is ASCII */
 
     bb = apr_brigade_create(ur->p, c->bucket_alloc);
@@ -196,6 +193,61 @@ static int process_ftp_connection(conn_rec *c)
     process_ftp_connection_internal(r, bb);
 
     return OK;
+}
+
+static apr_status_t ftp_command_output_filter(ap_filter_t * f, 
+                                           apr_bucket_brigade * bb)
+{
+    apr_bucket *e;
+    apr_status_t rv;
+    const char *buf;
+    const char *pos;
+ 
+    APR_BRIGADE_FOREACH(e, bb) {
+        apr_size_t len = e->length;
+
+        if (e->length != 0) {
+            rv = apr_bucket_read(e, &buf, &len, APR_BLOCK_READ);
+            if (rv != APR_SUCCESS) {
+                return rv;
+            }
+            /* We search the data for a LF, if we find one, we split the
+             * bucket so that the LF is the first character in the new
+             * bucket.  We then create a new bucket with a CR and insert
+             * it before the LF bucket.
+             */
+            pos = memchr(buf, APR_ASCII_LF, len);
+            while (pos) {
+                apr_bucket *b = NULL;
+                if ((pos > buf) && (*(pos - 1) != APR_ASCII_CR)) {
+                    /* XXX: won't detect a bare LF at the beginning
+                     * of any bucket not created by this function */
+                    apr_bucket_split(e, pos - buf);
+                    b = apr_bucket_immortal_create("\r", 1, f->c->bucket_alloc);
+                    APR_BUCKET_INSERT_AFTER(e, b);
+                    e = APR_BUCKET_NEXT(e);  /* Skip the inserted bucket */
+                    break;
+                }
+                else if (pos - buf + 1 < len) {
+                    /* there is at least one more char left in the bucket */
+                    if (*(pos + 1) == '.') {
+                        apr_bucket_split(e, pos - buf + 1);
+                        b = apr_bucket_immortal_create(".", 1,
+                                                       f->c->bucket_alloc);
+                        APR_BUCKET_INSERT_AFTER(e, b);
+                        e = APR_BUCKET_NEXT(e);  /* Skip the inserted bucket */
+                        break;
+                    }
+                    pos = memchr(pos+1, APR_ASCII_LF, len-(pos-buf+1));
+                }
+                else {
+                    /* done with this bucket */
+                    break;
+                }
+            }
+        }
+    }
+    return ap_pass_brigade(f->next, bb);
 }
 
 
@@ -230,6 +282,9 @@ static void register_hooks(apr_pool_t *p)
 
     ap_hook_process_connection(process_ftp_connection,NULL,NULL,
 			       APR_HOOK_MIDDLE);
+/* Register input/output filters */
+    ap_register_output_filter("FTP_COMMAND_OUTPUT", ftp_command_output_filter, NULL,
+                              AP_FTYPE_CONNECTION);
 
 /* Authentication Commands */
     ap_ftp_register_handler("USER", ap_ftp_handle_user, FTP_AUTH | FTP_USER_ACK,
@@ -280,20 +335,23 @@ static void register_hooks(apr_pool_t *p)
 		"(Specify Transfer Mode)", NULL, p);
 	ap_ftp_register_handler("PASV", ap_ftp_handle_pasv, FTP_TRANSACTION, 
 		"(Set Server into Passive Mode)", NULL, p);
+	/* Unfortunatly needed by some old clients */
+	ap_ftp_register_handler("PORT", ap_ftp_handle_port, FTP_TRANSACTION, 
+		"<sp> h1, h2, h3, h4, p1, p2", NULL, p);
 	ap_ftp_register_handler("TYPE", ap_ftp_handle_type, FTP_TRANSACTION, 
 		"<sp> [ A | E | I | L ]", NULL, p);
 	ap_ftp_register_handler("SITE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Directory Listing */
-	ap_ftp_register_handler("LIST", ap_ftp_handle_list, FTP_TRANS_PASV, 
+	ap_ftp_register_handler("LIST", ap_ftp_handle_list, FTP_TRANS_DATA, 
 		"[ <sp> path-name ]", NULL, p);
-	ap_ftp_register_handler("NLST", ap_ftp_handle_list, FTP_TRANS_PASV,
+	ap_ftp_register_handler("NLST", ap_ftp_handle_list, FTP_TRANS_DATA,
 		"[ <sp> path-name ]", (void *)1, p);
 /* File Rename */
 	ap_ftp_register_handler("RNFR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ap_ftp_register_handler("RNTO", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 /* File Transfer */
-	ap_ftp_register_handler("RETR", ap_ftp_handle_retr, FTP_TRANS_PASV, 
+	ap_ftp_register_handler("RETR", ap_ftp_handle_retr, FTP_TRANS_DATA, 
 		"<sp> file-name", NULL, p);
 	ap_ftp_register_handler("STOR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ap_ftp_register_handler("APPE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
@@ -316,10 +374,6 @@ static void register_hooks(apr_pool_t *p)
 	ap_ftp_register_handler("PBSZ", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Never support this one.. Connection goes server to client */
-	ap_ftp_register_handler("PORT", NULL, FTP_NOT_IMPLEMENTED, 
-		"<sp> h1, h2, h3, h4, p1, p2", NULL, p);
-
-	/* Assign output filters? */
 }
 
 static const command_rec ftp_cmds[] = {
@@ -328,8 +382,9 @@ static const command_rec ftp_cmds[] = {
 	AP_INIT_FLAG("FTPShowRealPermissions", ap_set_flag_slot,
 				(void *)APR_OFFSETOF(ftp_config_rec, bRealPerms), RSRC_CONF,
                  "Show Real Permissions on files.\nDefault: Off"),
-	AP_INIT_TAKE1("FTPDocumentRoot", set_ftp_docroot, NULL, RSRC_CONF,
-				 "Root of this FTP server\nDefault: The Server DocumentRoot"),
+	AP_INIT_FLAG("FTPAllowActive", ap_set_flag_slot,
+				(void *)APR_OFFSETOF(ftp_config_rec, bAllowPort), RSRC_CONF,
+                 "Allow active(PORT) connections on this server.\nDefault: On"),
 	AP_INIT_TAKE1("FTPPasvMinPort", ap_set_int_slot, 
 				(void *)APR_OFFSETOF(ftp_config_rec, nMinPort), RSRC_CONF,
 				"Minimum PASV port to use for Data connections\nDefault: 1024"),
