@@ -183,7 +183,8 @@ module.source.type=
 module.source.expanded=1
 module.source.files=\
 	ftp_module.c\
-	ftp_protocol.c
+	ftp_protocol.c\
+	gen_todo.pl
 
 module.pixmap.name=.
 module.pixmap.type=
@@ -207,7 +208,8 @@ module.doc.files=\
 	README\
 	NEWS\
 	AUTHORS\
-	ChangeLog
+	ChangeLog\
+	TODO
 
 module.po.expanded=0
 module.po.files=

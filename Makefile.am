@@ -9,6 +9,12 @@ INCLUDES = -I@apache_dir@/include
 
 noinst_HEADERS = ftp.h
 
+TODO: TODO_HEADER $(SOURCE) $(HEADERS)
+	./gen_todo.pl
+
+EXTRA_DIST = TODO
+DISTCLEANFILES = TODO
+
 install-exec-local:
 	@apache_dir@/bin/apxs -a -i -n ftp libhttpd_ftp.la
 

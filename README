@@ -7,8 +7,10 @@ a sample config entry
 
 Listen 21
 <VirtualHost *:21>
-	FTPprotocol on
 	DocumentRoot /var/ftp
+	FTPprotocol On
+	FTPShowRealPermissions Off
+	FTPAllowActive On
 	FTPMinPort 1024
 	FTPPaxPort 65535
 	<Directory /var/ftp>

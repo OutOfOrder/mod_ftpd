@@ -53,6 +53,20 @@
  *
  */
 
+
+/* An FTP Protocol Module for Apache
+ * RFC 959 - Primary FTP definition
+ * RFC 1123 - Updated refinement of FTP
+ * RFC 1579 - Recommendation of using PASV for clients
+ * RFC 1639 - LPRT and LPSV commands (not used much)
+ * RFC 2228 - AUTH security support
+ * RFC 2389 - FEAT command for features supported by server
+ * RFC 2428 - EPRT,EPSV IPV4,IPV6 support
+ * RFC 2640 - Internationalization support
+ * http://www.wu-ftpd.org/rfc/
+ * http://war.jgaa.com/ftp/?cmd=rfc
+ * http://cr.yp.to/ftp.html
+ */
 #define CORE_PRIVATE
 #include "httpd.h"
 #include "http_protocol.h"
@@ -137,22 +151,6 @@ static const char *set_ftp_protocol(cmd_parms *cmd, void *dummy, int arg)
 	pConfig->bEnabled = arg;
     return NULL;
 }
-
-/*static const char *set_ftp_docroot(cmd_parms *cmd, void *dummy, char *arg)
-{
-    ftp_config_rec *pConfig = ap_get_module_config(cmd->server->module_config,
-                                               &ftp_module);
-    const char *err = ap_check_cmd_context(cmd,NOT_IN_DIR_LOC_FILE|NOT_IN_LIMIT);
-	if (err) {
-		return err;
-	}
-	if (apr_filepath_merge((char**)&pConfig->sFtpRoot,NULL,arg, 
-			APR_FILEPATH_TRUENAME, cmd->pool) != APR_SUCCESS
-		|| !ap_is_directory(cmd->pool, arg)) {
-		return "FTPDocumentRoot must be a directory";
-	}
-    return NULL;
-}*/
 
 static int process_ftp_connection(conn_rec *c)
 {
@@ -291,8 +289,8 @@ static void register_hooks(apr_pool_t *p)
 		"<sp> username", NULL, p);  
     ap_ftp_register_handler("PASS", ap_ftp_handle_passwd, FTP_USER_ACK,
 		"<sp> password", NULL, p);
+	/* TODO: implement Secure AUTH */
 	ap_ftp_register_handler("AUTH", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
-	ap_ftp_register_handler("ACCT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* General Commands */
 	ap_ftp_register_handler("QUIT", ap_ftp_handle_quit, FTP_ALL_STATES,
@@ -303,6 +301,13 @@ static void register_hooks(apr_pool_t *p)
 		"", NULL, p);
 	ap_ftp_register_handler("SYST", ap_ftp_handle_syst, FTP_TRANSACTION,
 		"(Get Type of Operating System)", NULL, p);
+	ap_ftp_register_handler("FEAT", ap_ftp_handle_help, FTP_TRANSACTION,
+		"(list feature extensions)", (void *)1, p);
+	/* TODO: Store CLNT in UserAgent for logging? */
+	ap_ftp_register_handler("CLNT", ap_ftp_handle_NOOP, FTP_TRANSACTION,
+		"<sp> Client User Agent", NULL, p);
+	ap_ftp_register_handler("OPTS", NULL, FTP_NOT_IMPLEMENTED,
+		"<sp> command <sp> options", NULL, p);
 
 /* Directory Commands */
 	ap_ftp_register_handler("CWD", ap_ftp_handle_cd, FTP_TRANSACTION,
@@ -315,24 +320,24 @@ static void register_hooks(apr_pool_t *p)
 		"(Returns Current Directory)", NULL, p);
 	ap_ftp_register_handler("XPWD", ap_ftp_handle_pwd, FTP_TRANSACTION,
 		"(Returns Current Directory)", NULL, p);
+	/* TODO: implement mkdir */
 	ap_ftp_register_handler("MKD", NULL, FTP_NOT_IMPLEMENTED,
 		"<sp> directory-name", NULL, p);
 	ap_ftp_register_handler("XMKD", NULL, FTP_NOT_IMPLEMENTED,
 		"<sp> directory-name", NULL, p);
+	/* TODO: implement rmdir */
 	ap_ftp_register_handler("RMD", NULL, FTP_NOT_IMPLEMENTED,
 		"<sp> directory-name", NULL, p);
 	ap_ftp_register_handler("XRMD", NULL, FTP_NOT_IMPLEMENTED,
 		"<sp> directory-name", NULL, p);
-	ap_ftp_register_handler("SIZE", ap_ftp_handle_size, FTP_TRANSACTION,
+	/* TODO: Check for ASCII transfer mode and return failure for SIZE*/
+	ap_ftp_register_handler("SIZE", ap_ftp_handle_size, FTP_TRANSACTION | FTP_FEATURE,
 		"<sp> path-name", NULL, p);
-	ap_ftp_register_handler("MDTM", ap_ftp_handle_mdtm, FTP_TRANSACTION,
+	ap_ftp_register_handler("MDTM", ap_ftp_handle_mdtm, FTP_TRANSACTION | FTP_FEATURE,
 		"<sp> path-name", NULL, p);
 
 /* Transfer mode settings */
-	ap_ftp_register_handler("STRU", ap_ftp_handle_NOOP, FTP_TRANSACTION,
-		"(Specify File Structure)", NULL, p);
-	ap_ftp_register_handler("MODE", ap_ftp_handle_NOOP, FTP_TRANSACTION,
-		"(Specify Transfer Mode)", NULL, p);
+	/* TODO: Support IPV6 PASV hack? */
 	ap_ftp_register_handler("PASV", ap_ftp_handle_pasv, FTP_TRANSACTION, 
 		"(Set Server into Passive Mode)", NULL, p);
 	/* Unfortunatly needed by some old clients */
@@ -343,29 +348,43 @@ static void register_hooks(apr_pool_t *p)
 	ap_ftp_register_handler("SITE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Directory Listing */
+	/* TODO: support listing of a file with LIST */
 	ap_ftp_register_handler("LIST", ap_ftp_handle_list, FTP_TRANS_DATA, 
 		"[ <sp> path-name ]", NULL, p);
 	ap_ftp_register_handler("NLST", ap_ftp_handle_list, FTP_TRANS_DATA,
 		"[ <sp> path-name ]", (void *)1, p);
+
 /* File Rename */
-	ap_ftp_register_handler("RNFR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
-	ap_ftp_register_handler("RNTO", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	/* TODO: Implement renaming of files */
+	ap_ftp_register_handler("RNFR", NULL, FTP_NOT_IMPLEMENTED,
+		"<sp> path-name", NULL, p);
+	ap_ftp_register_handler("RNTO", NULL, FTP_NOT_IMPLEMENTED,
+		"<sp> path-name", NULL, p);
+
 /* File Transfer */
 	ap_ftp_register_handler("RETR", ap_ftp_handle_retr, FTP_TRANS_DATA, 
 		"<sp> file-name", NULL, p);
+	/* TODO: implement store, and append */
 	ap_ftp_register_handler("STOR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ap_ftp_register_handler("APPE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ap_ftp_register_handler("DELE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	/* TODO: implement restore */
 	ap_ftp_register_handler("REST", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	/* TODO: implement stou (suggested name upload */
 	ap_ftp_register_handler("STOU", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Abort/Status Pipelining */
-	ap_ftp_register_handler("STAT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	/* TODO: implement stat */
+	ap_ftp_register_handler("STAT", NULL, FTP_NOT_IMPLEMENTED, 
+		"[ <sp> path-name ]", NULL, p);
+	/* TODO: Do we need to support ABOR? */
 	ap_ftp_register_handler("ABOR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
-/* Extended Commands */
+/* Extended Commands for IPv6 support */
+	/* TODO: implement EPRT, and EPSV, RFCed IPV6 support */
 	ap_ftp_register_handler("EPRT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ap_ftp_register_handler("EPSV", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+/*  LONG passive and port */
 	ap_ftp_register_handler("LPRT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ap_ftp_register_handler("LPSV", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
@@ -373,24 +392,36 @@ static void register_hooks(apr_pool_t *p)
 	ap_ftp_register_handler("PROT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ap_ftp_register_handler("PBSZ", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
-/* Never support this one.. Connection goes server to client */
+/* Antiquated commands */
+	ap_ftp_register_handler("STRU", ap_ftp_handle_NOOP, FTP_TRANSACTION,
+		"(Specify File Structure) - (Depricated)", "F", p);
+	ap_ftp_register_handler("MODE", ap_ftp_handle_NOOP, FTP_TRANSACTION,
+		"(Specify Transfer Mode) - (Depricated)", "S", p);
+	ap_ftp_register_handler("ALLO", NULL, FTP_NOT_IMPLEMENTED, 
+		"(Pre-Allocate storage) (Depricated)", NULL, p);
+	ap_ftp_register_handler("SMNT", NULL, FTP_NOT_IMPLEMENTED, 
+		"(Structured Mount) - (Depricated)", NULL, p);
+	ap_ftp_register_handler("ACCT", NULL, FTP_NOT_IMPLEMENTED, 
+		"(Depricated)", NULL, p);
+	ap_ftp_register_handler("REIN", NULL, FTP_NOT_IMPLEMENTED, 
+		"(Reinitialize Server State) - (Depricated)", NULL, p);
 }
 
 static const command_rec ftp_cmds[] = {
     AP_INIT_FLAG("FTPProtocol", set_ftp_protocol, NULL, RSRC_CONF,
-                 "Whether this server is serving the FTP0 protocol"),
+                 "Whether this server is serving the FTP0 protocol. Default: Off"),
 	AP_INIT_FLAG("FTPShowRealPermissions", ap_set_flag_slot,
 				(void *)APR_OFFSETOF(ftp_config_rec, bRealPerms), RSRC_CONF,
-                 "Show Real Permissions on files.\nDefault: Off"),
+                 "Show Real Permissions on files. Default: Off"),
 	AP_INIT_FLAG("FTPAllowActive", ap_set_flag_slot,
 				(void *)APR_OFFSETOF(ftp_config_rec, bAllowPort), RSRC_CONF,
-                 "Allow active(PORT) connections on this server.\nDefault: On"),
+                 "Allow active(PORT) connections on this server. Default: On"),
 	AP_INIT_TAKE1("FTPPasvMinPort", ap_set_int_slot, 
 				(void *)APR_OFFSETOF(ftp_config_rec, nMinPort), RSRC_CONF,
-				"Minimum PASV port to use for Data connections\nDefault: 1024"),
-	AP_INIT_TAKE1("FTPPasvMinPort", ap_set_int_slot, 
+				"Minimum PASV port to use for Data connections. Default: 1024"),
+	AP_INIT_TAKE1("FTPPasvMaxPort", ap_set_int_slot, 
 				(void *)APR_OFFSETOF(ftp_config_rec, nMaxPort), RSRC_CONF,
-				"Minimum PASV port to use for Data connections\nDefault: 65535"),
+				"Maximum PASV port to use for Data connections. Default: 65535"),
     { NULL }
 };
 

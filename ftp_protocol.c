@@ -130,7 +130,6 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 
     while (1) {
         int res;
-
         if ((invalid_cmd > MAX_INVALID_CMD) ||
             ap_rgetline(&buffer, FTP_STRING_LENGTH, &len, r, 0, bb) != APR_SUCCESS)
         {
@@ -299,25 +298,40 @@ int ap_ftp_handle_help(request_rec *r, char *buffer, void *data)
 
 	command = ap_getword_white_nc(r->pool, &buffer);
 	if (command[0]=='\0') {
-		ap_rprintf(r, "214-The following commands are implemented.\r\n");
+		if (!(int)data) { /* HELP */
+			ap_rprintf(r, "214-The following commands are implemented.\r\n");
+		} else { /* FEAT */
+			ap_rprintf(r, "211-FEAT\r\n");
+		}
 		column = 0;
 		for (hash_itr = apr_hash_first(r->pool,ap_ftp_hash); hash_itr;
 				hash_itr = apr_hash_next(hash_itr)) {
 			apr_hash_this(hash_itr, (const void **)&command, NULL,(void **)&handle_func);
-			if (handle_func->states & FTP_NOT_IMPLEMENTED) continue;
 			command = apr_pstrdup(r->pool,command);
 			ap_ftp_str_toupper(command);
-			column++;
-			ap_rprintf(r,"    %-4s",command);
-			if ((column % 7)==0) {
-				ap_rputs("\r\n",r);
+			if (!(int)data) { /* HELP */
+				column++;
+				ap_rprintf(r,"   %-4s%c",command, 
+					(handle_func->states & FTP_NOT_IMPLEMENTED)?'*':' ');
+				if ((column % 7)==0) {
+					ap_rputs("\r\n",r);
+				}
+			} else { /* FEAT */
+				if (handle_func->states & FTP_FEATURE) {
+					ap_rprintf(r,"    %-4s\r\n",command);
+				}
 			}
 		}
-		if ((column % 7)!=0) {
-			ap_rputs("\r\n",r);
+		if (!(int)data) { /* HELP */
+			if ((column % 7)!=0) {
+				ap_rputs("\r\n",r);
+			}
+			ap_rprintf(r, "214-Use \"HELP command\" to get help for a specific command\r\n");
+			ap_rprintf(r, "214-Command not implemented have a '*' next to them.\r\n");
+			ap_rprintf(r, "214 Send Comments %s.\r\n",r->server->server_admin);
+		} else { /* FEAT */
+			ap_rprintf(r, "211 END\r\n");
 		}
-		ap_rprintf(r, "214-Use \"HELP command\" to get help for a specific command\r\n");
-		ap_rprintf(r, "214 Send Comments %s.\r\n",r->server->server_admin);
 	} else {
 		ap_str_tolower(command);
 		handle_func = apr_hash_get(ap_ftp_hash, command, APR_HASH_KEY_STRING);
@@ -353,7 +367,17 @@ int ap_ftp_handle_syst(request_rec *r, char *buffer, void *data)
 
 int ap_ftp_handle_NOOP(request_rec *r, char *buffer, void *data)
 {
-	ap_rputs("200 Command completed successfully.\r\n",r);
+	if (!data) {
+		ap_rputs("200 Command completed successfully.\r\n",r);
+	} else {
+		char *arg = ap_getword_white_nc(r->pool, &buffer);
+		ap_str_tolower(arg);
+		if (!apr_strnatcmp(arg, data)) {
+			ap_rputs("200 Command completed successfully.\r\n",r);
+		} else {
+			ap_rputs("504 Invalid argument.\r\n",r);
+		}
+	}
 	ap_rflush(r);
 	return OK;
 }
@@ -434,8 +458,7 @@ int ap_ftp_handle_port(request_rec *r, char *buffer, void *data)
 	ipaddr = apr_psprintf(r->pool, "%d.%d.%d.%d",ip1,ip2,ip3,ip4);
 	apr_sockaddr_info_get(&ur->data.port,ipaddr, APR_INET, (p1<<8)+p2,
 				0, ur->data.p);
-	ap_rprintf(r, "200 Command Successful\r\n",
-		ipaddr, (p1<<8)+p2,p1,p2);
+	ap_rprintf(r, "200 Command Successful\r\n");
 	ap_rflush(r);
 	ur->data.type = FTP_PIPE_PORT;
 	ur->state = FTP_TRANS_DATA;
@@ -488,21 +511,31 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 		return OK;
 	}
 
-	apr_dir_open(&dir, r->filename, ur->data.p);
-	if ((int)data==1) {
+	if (apr_dir_open(&dir, r->filename, ur->data.p)!=APR_SUCCESS) {
+		ap_rprintf(r, "451 Permission Denied\r\n");
+		ap_rflush(r);
+		ftp_data_socket_close(ur);
+		return OK;
+	}
+	if ((int)data==1) {  /* NLST */
 		flags = APR_FINFO_NAME | APR_FINFO_TYPE;
-	} else {
+	} else { /* LIST */
 		flags = APR_FINFO_NAME | APR_FINFO_TYPE | APR_FINFO_SIZE
 			| APR_FINFO_OWNER | APR_FINFO_PROT | APR_FINFO_MTIME
 			| APR_FINFO_TYPE;
 	}
 	nowtime = apr_time_now();
 	while (apr_dir_read(&entry,flags,dir)==APR_SUCCESS) {
-		if ((int)data==1) {
+		if ((int)data==1) { /* NLST */
 			if (entry.filetype != APR_DIR) {
-				apr_snprintf(buff, 128, "%s\r\n", entry.name);
+				/* TODO: Check for too many slashes in arg buffer */
+				if (*buffer!='\0') {
+					apr_snprintf(buff, 128, "%s/%s\r\n", buffer, entry.name);
+				} else {
+					apr_snprintf(buff, 128, "%s\r\n", entry.name);
+				}
 			}
-		} else {
+		} else { /* LIST */
 			if (!strcmp(entry.name,".") || !strcmp(entry.name,"..")) {
 				continue;
 			}
@@ -580,6 +613,7 @@ int ap_ftp_handle_type(request_rec *r, char *buffer, void *data)
 	ap_rflush(r);
 	return OK;
 }
+
 int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 {
 	char *filename = ap_getword_white_nc(r->pool,&buffer); 
@@ -596,7 +630,7 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 
 	ap_run_translate_name(r);
 	ap_run_map_to_storage(r);
-
+	/* TODO: hand a subrequest to Apache to retrieve file */
 	if (apr_file_open(&fp, r->filename, APR_READ | APR_SENDFILE_ENABLED,
 			APR_OS_DEFAULT, ur->data.p) != APR_SUCCESS) {
 		ap_rprintf(r, "451 %s: file does not exist\r\n",filename);

@@ -100,7 +100,7 @@ typedef struct ftp_handler_st {
 typedef enum { FTP_PIPE_NONE, FTP_PIPE_PASV, FTP_PIPE_PORT, FTP_PIPE_OPEN} ftp_pipe_state;
 
 /* connection state */
-typedef enum {FTP_AUTH = 1, FTP_USER_ACK = 2, FTP_TRANS_NODATA = 4, FTP_TRANS_DATA = 8, FTP_NOT_IMPLEMENTED = 16} ftp_state;
+typedef enum {FTP_AUTH = 1, FTP_USER_ACK = 2, FTP_TRANS_NODATA = 4, FTP_TRANS_DATA = 8, FTP_NOT_IMPLEMENTED = 16, FTP_FEATURE = 32} ftp_state;
 /* All States does not contain FTP_NOT_IMPLEMENTED */
 #define FTP_ALL_STATES FTP_AUTH | FTP_USER_ACK | FTP_TRANS_NODATA | FTP_TRANS_DATA
 /* Transaction state is both DATA and NODATA */

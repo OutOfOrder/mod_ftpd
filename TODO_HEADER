@@ -1,0 +1,7 @@
+TODO
+ * Add in character conversion code
+ * Add in logging
+ * Start debugging to get all clients to connect correctly
+ * Handing ACL to Apache
+
+/* */
