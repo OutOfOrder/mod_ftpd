@@ -10,7 +10,7 @@ provided at the end of this document.
 ----------------------------------------
 II. Building and installing instructions
 ----------------------------------------
-1) ./configure --with-apache=/path/to/apache
+1) ./configure --with-apxs=/path/to/apxs
 2) make
 3) su -c "make install"
 

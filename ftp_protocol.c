@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.30 2003/12/31 02:26:24 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.31 2004/01/04 02:58:25 urkle Exp $ */
 #define CORE_PRIVATE
 #include "httpd.h"
 #include "http_protocol.h"
@@ -148,6 +148,7 @@ static request_rec *ftp_create_subrequest(request_rec *r, ftp_user_rec *ur)
 	rnew->server		= r->server;
 
 	rnew->user			= r->user;
+	rnew->ap_auth_type	= r->ap_auth_type;
 
 	rnew->request_config = ap_create_request_config(rnew->pool);
 
@@ -159,6 +160,7 @@ static request_rec *ftp_create_subrequest(request_rec *r, ftp_user_rec *ur)
 	ap_copy_method_list(rnew->allowed_methods, r->allowed_methods);
 
 	ap_set_sub_req_protocol(rnew, r);
+
 	rnew->assbackwards = 0;
 	rnew->protocol = "FTP";
 	ap_run_create_request(rnew);
@@ -192,6 +194,8 @@ static int ftp_check_acl_ex(const char *newpath, request_rec *r, int skipauth)
 	if ((res = ap_run_map_to_storage(r)) != OK) {
 		return res;
 	}
+	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+		"URI %s -> %s", r->uri, r->filename);
 	if ((res = ap_location_walk(r)) != OK) {
 		return res;
 	}	
@@ -244,27 +248,35 @@ static char *ftp_ascii_convert(char *buf, apr_size_t *len, ascii_direction way, 
 
 int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 {
-    char *buffer = apr_palloc(r->pool, FTP_STRING_LENGTH);
+	char cmdbuff[FTP_STRING_LENGTH];
+    char *buffer;	/* a pointer to cmdbuff */
 	char *command;
     int invalid_cmd = 0;
     apr_size_t len;
     ftp_handler_st *handle_func;
 	apr_status_t res;
 	request_rec *handler_r;
+	apr_pool_t *p;
+	apr_time_t request_time;
     ftp_user_rec *ur = ftp_get_user_rec(r);
 
-	r->the_request = apr_pstrdup(r->pool, "IDLE");
+	apr_pool_create(&p, r->pool);
+
+	r->the_request = "IDLE";
 	ap_update_child_status(r->connection->sbh, SERVER_BUSY_KEEPALIVE, r);
     while (1) {
+		buffer = cmdbuff;   /* reset buffer pointer */
+		apr_pool_clear(p);
         if ((invalid_cmd > MAX_INVALID_CMD) ||
             ap_rgetline(&buffer, FTP_STRING_LENGTH, &len, r, 0, bb) != APR_SUCCESS)
         {
             break;
         }
-		r->request_time = apr_time_now();
+		request_time = apr_time_now();
 		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-				"C: %s",buffer);
-        command = ap_getword_white_nc(r->pool, &buffer);
+				"C:(%d)%s",len, buffer);
+		/* This command moves the pointer of buffer to the end of the extracted string */
+        command = ap_getword_white_nc(p, &buffer);
         ap_str_tolower(command);
         handle_func = apr_hash_get(ap_ftp_hash, command, APR_HASH_KEY_STRING);
 
@@ -293,11 +305,11 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
             	ap_rprintf(r, "500 '%s': command not allowed in this state\r\n", command);
 			}
             ap_rflush(r);
-            invalid_cmd++;
+            //invalid_cmd++;
             continue;
         }
 		handler_r = ftp_create_subrequest(r,ur);
-
+		handler_r->request_time = request_time;
 		ap_ftp_str_toupper(command);
 	
 		if (handle_func->states & FTP_FLAG_HIDE_ARGS) {
@@ -333,17 +345,17 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 		ap_increment_counts(r->connection->sbh, handler_r);
 		ap_update_child_status(r->connection->sbh, SERVER_BUSY_KEEPALIVE, r);
 
-		apr_pool_destroy(handler_r->pool);
-
 		if (res == FTP_HANDLER_UPDATE_AUTH) {
 			/* Assign to master request_rec for all subreqs */
 			r->user = apr_pstrdup(r->pool, ur->user);
 		    apr_table_set(r->headers_in, "Authorization", ur->auth_string);
+			r->ap_auth_type = apr_pstrdup(r->pool, handler_r->ap_auth_type);
 		} else if (res == FTP_HANDLER_UPDATE_AGENT) {
 			apr_table_set(r->headers_in, "User-Agent", ur->useragent);
 		} else if (res == FTP_HANDLER_QUIT) {
             break;
         }
+		apr_pool_destroy(handler_r->pool);
     }
     return FTP_HANDLER_OK;
 }
@@ -394,7 +406,7 @@ HANDLER_DECLARE(passwd)
 
     passwd = apr_psprintf(r->pool, "%s:%s", ur->user,
                           ap_getword_white_nc(r->pool, &buffer));
-    ur->auth_string = apr_psprintf(r->pool, "Basic %s",
+    ur->auth_string = apr_psprintf(ur->p, "Basic %s",
                                    ap_pbase64encode(r->pool, passwd)); 
 	r->user = apr_pstrdup(r->pool, ur->user);
     apr_table_set(r->headers_in, "Authorization", ur->auth_string);
@@ -814,7 +826,7 @@ HANDLER_DECLARE(list)
 	apr_dir_t *dir;
 	apr_finfo_t entry;
 	apr_int32_t flags;
-	char buff[128];
+	char *listline;
 	apr_time_exp_t time;
 	apr_time_t nowtime;
  	char *user, *group;
@@ -890,9 +902,9 @@ HANDLER_DECLARE(list)
 		if ((int)data==1) { /* NLST */
 			if (entry.filetype != APR_DIR) {
 				if (*buffer!='\0') {
-					apr_snprintf(buff, 128, "%s\r\n", ap_make_full_path(r->pool,buffer, entry.name));
+					listline = apr_psprintf(r->pool,"%s\r\n", ap_make_full_path(r->pool,buffer, entry.name));
 				} else {
-					apr_snprintf(buff, 128, "%s\r\n", entry.name);
+					listline = apr_psprintf(r->pool, "%s\r\n", entry.name);
 				}
 			} else {
 				continue;
@@ -949,13 +961,13 @@ HANDLER_DECLARE(list)
 				linkdest[0]='\0';
 			}*/
 
-			apr_snprintf(buff, 128, "%s   1 %-8s %-8s %8"APR_OFF_T_FMT" %s %s\r\n",
+			listline = apr_psprintf(r->pool, "%s   1 %-8s %-8s %8"APR_OFF_T_FMT" %s %s\r\n",
 				strperms, user, group,
 				entry.size, strtime, entry.name);
 		}
-		res = strlen(buff);
+		res = strlen(listline);
 		r->bytes_sent += res;
-		apr_socket_send(ur->data.pipe, buff, &res);
+		apr_socket_send(ur->data.pipe, listline, &res);
 	}
 	apr_dir_close(dir);
 	ap_rputs(FTP_C_TRANSFEROK" Transfer complete.\r\n",r);
@@ -1082,7 +1094,7 @@ HANDLER_DECLARE(retr)
 		} else {
 			iodone = 1;
 		}
-	}	
+	}
 /* Close verything up */
 	ap_rprintf(r, FTP_C_TRANSFEROK" Transfer complete\r\n");
 	ap_rflush(r);

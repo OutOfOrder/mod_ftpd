@@ -84,10 +84,10 @@ clean: clean-subdirs
 
 distclean: clean distclean-subdirs
 	$(RM) TODO config.status config.log config.h config.h.in \
-	configure stamp-h stamp-h.in Makefile
+	configure stamp-h stamp-h.in Makefile aclocal.m4
 	$(RM) -r autom4te-2.53.cache .libs
 
-DESTDIR = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
+DESTDIR = @PACKAGE_NAME@-@PACKAGE_VERSION@
 DESTTGZ = $(DESTDIR).tar.gz
 dist:
 	@rm -rf $(DESTDIR); \
