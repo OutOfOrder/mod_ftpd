@@ -44,7 +44,7 @@
 #include "util_filter.h"
 #include "scoreboard.h"
 #include "ap_provider.h"
-
+#include "mod_status.h"
 #include "ftp.h"
 
 int ftpd_methods[FTPD_M_LAST];
@@ -322,6 +322,11 @@ static const char *ftpd_set_order_slot(cmd_parms *cmd,
     return NULL;
 }
 
+static int status_hook(request_rec *r, int flags)
+{
+  return OK;
+}
+
 static void register_hooks(apr_pool_t *p)
 {
 	static const char * const aszPre[] = { "mod_alias.c", NULL };
@@ -331,6 +336,8 @@ static void register_hooks(apr_pool_t *p)
 
     ap_hook_process_connection(process_ftpd_connection,NULL,NULL,
 			       APR_HOOK_MIDDLE);
+    AP_OPTIONAL_HOOK(status_hook,status_hook,NULL,NULL,APR_HOOK_MIDDLE);
+
 /* For registering ftp methods */
 	ap_hook_post_config(ftpd_init_handler, NULL, NULL, APR_HOOK_MIDDLE);
 /* Translate hook for Chroot supporting */
