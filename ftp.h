@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/ftp.h,v 1.21 2004/01/08 04:42:48 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp.h,v 1.22 2004/01/08 22:11:31 urkle Exp $ */
 #ifndef FTP_H
 #define FTP_H
 
@@ -102,7 +102,8 @@ typedef struct {
 	int nMaxPort; /* Maximum PASV port to use */
 	int bRealPerms; /* Show real permissionts in file listing */
 	int bAllowPort; /* Whether to allow the PORT command */
-	ftpd_provider_list *providers; /* Order of chroot querying */
+	ftpd_provider_list *chroots; /* Order of chroot querying */
+	ftpd_provider_list *limits;  /* Order of limit querying */
 	int bAnnounce; /* Annount in the server header */
 	int bAllowFXP; /* Allow pasv and port connections from/to machines other than the client */
 	char *sFakeGroup; /* The fake group name to display for listings */

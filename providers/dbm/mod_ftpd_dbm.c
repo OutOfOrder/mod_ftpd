@@ -162,21 +162,17 @@ static ftpd_chroot_status_t ftpd_dbm_map_chroot(const request_rec *r,
 }
 
 /* Module initialization structures */
-static const ftpd_hooks_chroot ftpd_hooks_chroot_dbm =
-{
-	ftpd_dbm_map_chroot		/* map_chroot */
-};
 
 static const ftpd_provider ftpd_dbm_provider =
 {
-	&ftpd_hooks_chroot_dbm,		/* chroot */
-	NULL		/* listing */
+	ftpd_dbm_map_chroot,		/* map_chroot */
+	NULL
 };
 
 static const command_rec ftpd_dbm_cmds[] = {
-	AP_INIT_TAKE1("FTPChrootDBM", ftpd_dbm_cmd_dbmpath, NULL, RSRC_CONF,
+	AP_INIT_TAKE1("FtpDBMFile", ftpd_dbm_cmd_dbmpath, NULL, RSRC_CONF,
                  "Path to Database to use chroot mapping."),
-	AP_INIT_TAKE1("FTPChrootDBMType", ftpd_dbm_cmd_dbmtype, NULL, RSRC_CONF,
+	AP_INIT_TAKE1("FtpDBMType", ftpd_dbm_cmd_dbmtype, NULL, RSRC_CONF,
                  "What type of DBM file to open. default, DB,GDBM,NDBM, SDBM."),
     { NULL }
 };

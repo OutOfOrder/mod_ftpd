@@ -76,7 +76,11 @@ module.source.expanded=1
 module.source.files=\
 	ftp_protocol.c\
 	gen_todo.pl\
-	ftp_core.c
+	ftp_core.c\
+	providers/dbi/mod_ftpd_dbi.c\
+	providers/dbm/mod_ftpd_dbm.c\
+	providers/default/mod_ftpd_default.c\
+	providers/fail/mod_ftpd_fail.c
 
 module.pixmap.name=.
 module.pixmap.type=

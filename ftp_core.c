@@ -54,7 +54,7 @@
  */
 
 
-/* $Header: /home/cvs/httpd-ftp/ftp_core.c,v 1.20 2004/01/08 04:42:48 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp_core.c,v 1.21 2004/01/08 22:11:31 urkle Exp $ */
 /* An FTP Protocol Module for Apache
  * RFC 959 - Primary FTP definition
  * RFC 1123 - Updated refinement of FTP
@@ -301,23 +301,24 @@ FTPD_DECLARE(ftpd_user_rec) *ftpd_get_user_rec(const request_rec *r)
 #define MODULE_NAME ftpd_module
 #include "server_config.h"
 
-static const char *ftpd_set_chroot_order(cmd_parms *cmd,
-                                    		 void *struct_ptr,
+static const char *ftpd_set_order_slot(cmd_parms *cmd,
+                                    		 void *dummy,
                                      		 const char *arg)
 {
 	const char *provider_name;
+	int offset = (int)(long)cmd->info;
+	void *ptr = ap_get_module_config(cmd->server->module_config,
+					&ftpd_module);
+	ftpd_provider_list **list = (ftpd_provider_list **)((char *)ptr + offset);
 	ftpd_provider_list *newp;
-	ftpd_svr_config_rec *pConfig = ap_get_module_config(cmd->server->module_config,
-								&ftpd_module);
 
 	const char *err = ap_check_cmd_context(cmd,NOT_IN_DIR_LOC_FILE|NOT_IN_LIMIT);
 	if (err) {
 		return err;
 	}
-
 	if (strcasecmp(arg, "none") == 0) {
 		/* disable all providers */
-		pConfig->providers = NULL;
+		list = NULL;
 		return NULL;
 	} else {
 		provider_name = apr_pstrdup(cmd->pool, arg);
@@ -326,13 +327,13 @@ static const char *ftpd_set_chroot_order(cmd_parms *cmd,
 	newp->name = provider_name;
 	newp->provider = ap_lookup_provider(FTPD_PROVIDER_GROUP, newp->name, "0");
 	if (newp->provider == NULL) {
-		return apr_psprintf(cmd->pool, "Chroot Provider '%s' not loaded", newp->name);
+		return apr_psprintf(cmd->pool, "Provider '%s' not loaded", newp->name);
 	}
 	/* add to the list */
-	if (!pConfig->providers) {
-		pConfig->providers = newp;
+	if (!*list) {
+		*list = newp;
 	} else {
-		ftpd_provider_list *last = pConfig->providers;
+		ftpd_provider_list *last = *list;
 		while (last->next) {
 			last = last->next;
 		}
@@ -481,43 +482,47 @@ static void register_hooks(apr_pool_t *p)
 }
 
 static const command_rec ftpd_cmds[] = {
-    AP_INIT_FLAG("FTPProtocol", ap_set_server_flag_slot, 
+    AP_INIT_FLAG("FtpProtocol", ap_set_server_flag_slot, 
 				(void *)APR_OFFSETOF(ftpd_svr_config_rec, bEnabled), RSRC_CONF,
                  "Whether this server is serving the FTP protocol. Default: Off"),
 
-	AP_INIT_FLAG("FTPShowRealPermissions", ap_set_server_flag_slot,
+	AP_INIT_FLAG("FtpShowRealPermissions", ap_set_server_flag_slot,
 				(void *)APR_OFFSETOF(ftpd_svr_config_rec, bRealPerms), RSRC_CONF,
                  "Show Real Permissions of files. Default: Off"),
 
-	AP_INIT_TAKE1("FTPFakeGroup", ap_set_server_string_slot,
+	AP_INIT_TAKE1("FtpFakeGroup", ap_set_server_string_slot,
 				(void *)APR_OFFSETOF(ftpd_svr_config_rec, sFakeGroup), RSRC_CONF,
 				"The fake group name to display in directory listings. Default: ftp"),
 
-	AP_INIT_TAKE1("FTPFakeUser", ap_set_server_string_slot,
+	AP_INIT_TAKE1("FtpFakeUser", ap_set_server_string_slot,
 				(void *)APR_OFFSETOF(ftpd_svr_config_rec, sFakeUser), RSRC_CONF,
 				"The fake user name to display in directory listings. Default: ftp"),
 
-	AP_INIT_FLAG("FTPAllowActive", ap_set_server_flag_slot,
+	AP_INIT_FLAG("FtpAllowActive", ap_set_server_flag_slot,
 				(void *)APR_OFFSETOF(ftpd_svr_config_rec, bAllowPort), RSRC_CONF,
                  "Allow active(PORT) connections on this server. Default: On"),
 
-	AP_INIT_FLAG("FTPAllowFXP", ap_set_server_flag_slot,
+	AP_INIT_FLAG("FtpAllowFXP", ap_set_server_flag_slot,
 				(void *)APR_OFFSETOF(ftpd_svr_config_rec, bAllowFXP), RSRC_CONF,
 				"Allow FXP transfers (ie. transfer data to a different server/client). Default: Off"),
 
-	AP_INIT_TAKE1("FTPPasvMinPort", ap_set_server_int_slot, 
+	AP_INIT_TAKE1("FtpPasvMinPort", ap_set_server_int_slot, 
 				(void *)APR_OFFSETOF(ftpd_svr_config_rec, nMinPort), RSRC_CONF,
 				"Minimum PASV port to use for Data connections. Default: 1024"),
 
-	AP_INIT_TAKE1("FTPPasvMaxPort", ap_set_server_int_slot, 
+	AP_INIT_TAKE1("FtpPasvMaxPort", ap_set_server_int_slot, 
 				(void *)APR_OFFSETOF(ftpd_svr_config_rec, nMaxPort), RSRC_CONF,
 				"Maximum PASV port to use for Data connections. Default: 65535"),
 
-	AP_INIT_ITERATE("FTPChroot", ftpd_set_chroot_order,
-				NULL, RSRC_CONF,
-				"List of Chroot prviders to query for chrooting the loging in user. Default: none"),
+	AP_INIT_ITERATE("FtpChrootOrder", ftpd_set_order_slot,
+				(void *)APR_OFFSETOF(ftpd_svr_config_rec, chroots), RSRC_CONF,
+				"List of prviders to query for chrooting the loging in user. Default: none"),
 
-	AP_INIT_FLAG("FTPServerAnnounce", ap_set_server_flag_slot,
+	AP_INIT_ITERATE("FtpLimitOrder", ftpd_set_order_slot,
+				(void *)APR_OFFSETOF(ftpd_svr_config_rec, limits), RSRC_CONF,
+				"List of prviders to query for limiting the loging in user. Default: none"),
+
+	AP_INIT_FLAG("FtpServerAnnounce", ap_set_server_flag_slot,
 				(void *)APR_OFFSETOF(ftpd_svr_config_rec, bAnnounce), RSRC_CONF,
 				"Whether to announce this module in the server header. Default: On"),
 

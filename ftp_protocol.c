@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.32 2004/01/08 04:42:48 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.33 2004/01/08 22:11:31 urkle Exp $ */
 #define CORE_PRIVATE
 #include "httpd.h"
 #include "http_protocol.h"
@@ -77,6 +77,7 @@
 
 extern int ftpd_methods[FTPD_M_LAST];
 
+/* close a data connection */
 static int ftpd_data_socket_close(ftpd_user_rec *ur)
 {
 	switch (ur->data.type) {
@@ -95,6 +96,7 @@ static int ftpd_data_socket_close(ftpd_user_rec *ur)
 	return OK;
 }
 
+/* open a data connection */
 static int ftpd_data_socket_connect(ftpd_user_rec *ur, ftpd_svr_config_rec *pConfig)
 {
 	apr_status_t res=-1;
@@ -130,6 +132,95 @@ static int ftpd_data_socket_connect(ftpd_user_rec *ur, ftpd_svr_config_rec *pCon
 		break;
 	}
 	return res;
+}
+
+
+static ftpd_chroot_status_t ftpd_call_chroot(ftpd_svr_config_rec *pConfig, request_rec *r,
+					const char **chroot, const char **initroot)
+{
+	ftpd_provider_list *current_provider;
+	for (current_provider = pConfig->chroots;
+			current_provider;
+			current_provider = current_provider->next)
+	{
+		ftpd_chroot_status_t chroot_ret;
+		const ftpd_provider *provider;
+		provider = current_provider->provider;
+
+		if (! provider->map_chroot) {
+			ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+				"Provider '%s' does not provider chroot mapping.",
+				current_provider->name);
+		} else {
+			ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+				"Chroot provider %s", current_provider->name);
+			chroot_ret = provider->map_chroot(r, chroot, initroot);
+			if (chroot_ret == FTPD_CHROOT_USER_FOUND) {
+				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+					"Chroot set to %s", *chroot);
+				return FTPD_CHROOT_USER_FOUND;
+			} else if (chroot_ret == FTPD_CHROOT_FAIL) {
+				ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+					"User denied access to server");
+				ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed\r\n");
+				ap_rflush(r);
+				return FTPD_CHROOT_FAIL;
+			} else { /* FTPD_CHROOT_USER_NOT_FOUND*/
+				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+					"User not found in chroot provider. Continuing");
+			}
+		}
+		current_provider = current_provider->next;
+	}
+	return FTPD_CHROOT_USER_NOT_FOUND;
+}
+
+static ftpd_limit_status_t ftpd_call_limit(ftpd_svr_config_rec *pConfig,
+										request_rec *r, ftpd_limit_check_t check_type)
+{
+	ftpd_provider_list *current_provider;
+	for (current_provider = pConfig->limits;
+			current_provider;
+			current_provider = current_provider->next)
+	{
+		ftpd_limit_status_t limit_ret;
+		const ftpd_provider *provider;
+		provider = current_provider->provider;
+
+		if (! provider->limit_check) {
+			ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+				"Provider '%s' does not provider limit support.",
+				current_provider->name);
+		} else {
+			ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+				"Limit provider %s", current_provider->name);
+			limit_ret = provider->limit_check(r,check_type);
+			if (limit_ret == FTPD_LIMIT_TOOMANY) {
+				ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+					"Too many users logged in.");
+				return FTPD_LIMIT_TOOMANY;
+			} else if (limit_ret == FTPD_LIMIT_ALLOW) {
+				/* This one says we can login, lets check the next */
+				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+					"Limit ALLOW, Contining.");
+			} else { /* FTPD_LIMIT_DEFAULT */
+				/* this is only hit during checkin/checkout */
+				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+					"Check%s called: %s", 
+					check_type==FTPD_LIMIT_CHECKIN?"in":"out",
+					current_provider->name);
+			}
+		}
+	}
+	return check_type==FTPD_LIMIT_CHECK?FTPD_LIMIT_ALLOW:FTPD_LIMIT_DEFAULT;
+}
+
+static apr_status_t ftpd_limit_checkout(void *r)
+{
+	ftpd_svr_config_rec *pConfig = ap_get_module_config(((request_rec *)r)->server->module_config,
+					&ftpd_module);
+	ftpd_call_limit(pConfig, r, FTPD_LIMIT_CHECKOUT);
+	return APR_SUCCESS;
 }
 
 /* Creates a sub request record for handlers */
@@ -357,6 +448,9 @@ int process_ftpd_connection_internal(request_rec *r, apr_bucket_brigade *bb)
         }
 		apr_pool_destroy(handler_r->pool);
     }
+	if (ur->state & FTPD_STATE_TRANSACTION) {
+		
+	}
     return FTPD_HANDLER_OK;
 }
 
@@ -396,13 +490,18 @@ HANDLER_DECLARE(user)
 HANDLER_DECLARE(passwd)
 {
 	char *passwd;
-	ftpd_provider_list *current_provider;
 	apr_status_t res;
-	const char *chroot = NULL,*initroot = NULL;
 	ftpd_chroot_status_t chroot_ret;
+	ftpd_limit_status_t limit_ret;
+	const char *chroot = NULL,*initroot = NULL;
 	ftpd_user_rec *ur = ftpd_get_user_rec(r);
 	ftpd_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
 					&ftpd_module);
+
+	/* Get chroot mapping */
+	chroot_ret = ftpd_call_chroot(pConfig,r,&chroot,&initroot);
+	if (chroot_ret == FTPD_CHROOT_FAIL)
+		return FTPD_HANDLER_QUIT;
 
     passwd = apr_psprintf(r->pool, "%s:%s", ur->user,
                           ap_getword_white_nc(r->pool, &buffer));
@@ -411,44 +510,12 @@ HANDLER_DECLARE(passwd)
 	r->user = apr_pstrdup(r->pool, ur->user);
     apr_table_set(r->headers_in, "Authorization", ur->auth_string);
 
-	/* Get chroot mapping */
-	current_provider = pConfig->providers;
-	while (current_provider) {
-		const ftpd_provider *provider;
-		provider = current_provider->provider;
-
-		if (! provider->chroot) {
-			ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
-				"Provider '%s' does not provider chroot mapping.",
-				current_provider->name);
-		} else {
-			ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-				"Check provider %s", current_provider->name);
-			chroot_ret = provider->chroot->map_chroot(r, &chroot, &initroot);
-			if (chroot_ret == FTPD_CHROOT_USER_FOUND) {
-				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-					"Chroot set to %s", chroot);
-				break; /* We got one fall out */
-			} else if (chroot_ret == FTPD_CHROOT_FAIL) {
-				ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
-					"User denied access to server");
-				ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed\r\n");
-				ap_rflush(r);
-				/* Bail out immediatly if this occurs */
-				return FTPD_HANDLER_QUIT;
-			} else { /* FTPD_CHROOT_USER_NOT_FOUND*/
-				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-					"User not found in chroot provider. Continuing");
-			}
-		}
-		current_provider = current_provider->next;
-	}
-
 	if (chroot) {
 		ur->chroot = apr_pstrdup(ur->p, chroot);
 	} else {
 		ur->chroot = NULL;
 	}
+
 	/* TODO: check to make sure this directory actually exists and fall back to chroot dir */
 	if (initroot) {
 		if (initroot[0]=='/') {
@@ -487,7 +554,16 @@ HANDLER_DECLARE(passwd)
                "Unauthorized user '%s' tried to log in:", ur->user);
 		return FTPD_HANDLER_USER_UNKNOWN;
 	}
-
+	/* check to see if there is space in limits */
+	limit_ret = ftpd_call_limit(pConfig, r, FTPD_LIMIT_CHECK);
+	if (limit_ret == FTPD_LIMIT_TOOMANY) {
+		/* Too many users logged in */
+		return FTPD_HANDLER_QUIT;
+	}
+	/* register login with limit provider */
+	limit_ret = ftpd_call_limit(pConfig, r, FTPD_LIMIT_CHECKIN);
+	/* register a checkout with session pool */
+	apr_pool_cleanup_register(ur->p, (void *)r, ftpd_limit_checkout, apr_pool_cleanup_null);
 	/* Report succsessful login */
     ap_rprintf(r, FTP_C_LOGINOK" User %s logged in.\r\n", ur->user);
     ap_rflush(r);

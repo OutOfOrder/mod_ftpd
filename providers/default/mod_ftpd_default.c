@@ -57,15 +57,26 @@
 #include "httpd.h"
 #include "http_config.h"
 #include "apr_strings.h"
+/*#include "apr_global_mutex.h"*/
+#include "apr_shm.h"
 #include "http_log.h"
 #include "ap_provider.h"
 
 #include "mod_ftpd.h"
 
+typedef struct {
+	int counter;
+} ftpd_default_counter_rec;
+
 /* per server configuration */
 typedef struct {
 	const char *chroot_path;
+	/*apr_global_mutex_t *mutex;*/
+	apr_shm_t *counter_shm;
+	ftpd_default_counter_rec *counter;
 } ftpd_default_server_conf;
+
+#define MOD_FTPD_DEFAULT_SHMEM_CACHE "/tmp/mod_ftpd_default_cache"
 
 module AP_MODULE_DECLARE_DATA ftpd_default_module;
 
@@ -74,6 +85,52 @@ static void *ftpd_default_create_server_config(apr_pool_t *p, server_rec *s)
 {
 	ftpd_default_server_conf *pConfig = apr_pcalloc(p, sizeof(ftpd_default_server_conf));
 	return pConfig;
+}
+
+static apr_status_t ftpd_cleanup_shm(void *s)
+{
+	ftpd_default_server_conf *pConfig = ap_get_module_config(((server_rec *)s)->module_config, 
+								&ftpd_default_module);
+	apr_shm_destroy(pConfig->counter_shm);
+	pConfig->counter_shm = NULL;
+	return APR_SUCCESS;
+}
+
+static int ftpd_default_post_conf(apr_pool_t *p, apr_pool_t *log, apr_pool_t *temp,
+								server_rec *s)
+{
+	apr_status_t rv;
+	ftpd_default_server_conf *pConfig = ap_get_module_config(s->module_config, 
+								&ftpd_default_module);
+/*	void *data = NULL;
+	const char *userdata_key = "ftpd_default_post_config";
+
+	apr_pool_userdata_get(&data, userdata_key, s->process->pool);
+	if (data == NULL) {
+		apr_pool_userdata_set((const void *)1, userdata_key,
+			apr_pool_cleanup_null, s->process->pool);
+		return OK;
+	}
+	rv = apr_global_mutex_create(&pConfig->mutex, MOD_FTPD_DEFAULT_SHMEM_CACHE,
+			APR_LOCK_DEFAULT,p);*/
+
+	rv = apr_shm_create(&pConfig->counter_shm, sizeof(ftpd_default_counter_rec),
+			MOD_FTPD_DEFAULT_SHMEM_CACHE, p);
+	apr_pool_cleanup_register(p, (void *)s, ftpd_cleanup_shm, apr_pool_cleanup_null); 
+	return OK;
+}
+
+static void ftpd_default_init_child(apr_pool_t *pchild, server_rec *s)
+{
+	apr_status_t rv;
+	ftpd_default_server_conf *pConfig = ap_get_module_config(s->module_config, 
+								&ftpd_default_module);
+/*	rv = apr_global_mutex_child_init(&pConfig->mutex,
+			MOD_FTPD_DEFAULT_SHMEM_CACHE, pchild);*/
+	rv = apr_shm_attach(&pConfig->counter_shm,
+			MOD_FTPD_DEFAULT_SHMEM_CACHE, pchild);
+
+	pConfig->counter = apr_shm_baseaddr_get(pConfig->counter_shm);
 }
 
 static const char * ftpd_default_cmd_chrootpath(cmd_parms *cmd, void *config,
@@ -97,26 +154,45 @@ static ftpd_chroot_status_t ftpd_default_map_chroot(const request_rec *r,
 	return FTPD_CHROOT_USER_FOUND;
 }
 
-/* Module initialization structures */
-static const ftpd_hooks_chroot ftpd_hooks_chroot_default =
+
+static ftpd_limit_status_t ftpd_default_limit_check(const request_rec *r, 
+											ftpd_limit_check_t check_type)
 {
-	ftpd_default_map_chroot		/* map_chroot */
-};
+	ftpd_default_server_conf *pConfig = ap_get_module_config(r->server->module_config,
+										&ftpd_default_module);
+	switch (check_type) {
+	case FTPD_LIMIT_CHECK:
+		break;
+	case FTPD_LIMIT_CHECKIN:
+		pConfig->counter->counter++;
+		break;
+	case FTPD_LIMIT_CHECKOUT:
+		pConfig->counter->counter--;
+		break;
+	}
+	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+		"Login count: %d", pConfig->counter->counter);
+	return check_type==FTPD_LIMIT_CHECK?FTPD_LIMIT_ALLOW:FTPD_LIMIT_DEFAULT;
+}
+
+/* Module initialization structures */
 
 static const ftpd_provider ftpd_default_provider =
 {
-	&ftpd_hooks_chroot_default,		/* chroot */
-	NULL		/* listing */
+	ftpd_default_map_chroot,	/* map_chroot */
+	ftpd_default_limit_check	/* limit_checkin */
 };
 
 static const command_rec ftpd_default_cmds[] = {
-	AP_INIT_TAKE1("FTPChrootPath", ftpd_default_cmd_chrootpath, NULL, RSRC_CONF,
-                 "Path to Database to use chroot mapping."),
+	AP_INIT_TAKE1("FtpDefaultChroot", ftpd_default_cmd_chrootpath, NULL, RSRC_CONF,
+                 "Path to set the chroot to."),
     { NULL }
 };
 
 static void register_hooks(apr_pool_t *p)
 {
+	ap_hook_post_config(ftpd_default_post_conf, NULL, NULL, APR_HOOK_MIDDLE);
+	ap_hook_child_init(ftpd_default_init_child, NULL, NULL, APR_HOOK_MIDDLE);
 	ap_register_provider(p, FTPD_PROVIDER_GROUP, "default", "0",
 		&ftpd_default_provider);
 }

@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/mod_ftpd.h,v 1.1 2004/01/08 04:42:49 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/mod_ftpd.h,v 1.2 2004/01/08 22:11:31 urkle Exp $ */
 #ifndef _MOD_FTPD_H_
 #define _MOD_FTPD_H_
 
@@ -66,7 +66,7 @@ extern "C" {
 
 /* Current version of the Plugin interface */
 
-#define FTPD_PLUGIN_VERSION 20031215
+#define FTPD_PLUGIN_VERSION 20040108
 
 /* Create a set of FTPD_DECLARE(type), FTPD_DECLARE_NONSTD(type) and 
  * FTPD_DECLARE_DATA with appropriate export and import tags for the platform
@@ -254,16 +254,6 @@ typedef struct ftpd_user_rec {
 FTPD_DECLARE(ftpd_user_rec) *ftpd_get_user_rec(const request_rec *r);
 
 /*
- * HOOK Stuctures
- *
- * Forward Declared HOOKS
- *
- */
-
-typedef struct ftpd_hooks_chroot ftpd_hooks_chroot;
-typedef struct ftpd_hooks_listing ftpd_hooks_listing;
-
-/*
  * FTP Plugins
  *
  */
@@ -276,9 +266,38 @@ typedef struct ftpd_hooks_listing ftpd_hooks_listing;
  */
 #define FTPD_PROVIDER_GROUP "ftpd"
 
+/* chroot hooks */
+typedef enum {
+	FTPD_CHROOT_USER_FOUND = 0,	/* User is found and chroot has been set */
+	FTPD_CHROOT_USER_NOT_FOUND,	/* User not found pass to next provider */
+	FTPD_CHROOT_FAIL				/* Fail the login */
+} ftpd_chroot_status_t;
+
+/* limit hooks */
+typedef enum {
+	FTPD_LIMIT_DEFAULT = 0, /* returned from checkin/checkout */
+	FTPD_LIMIT_ALLOW,		/* Another user is allowed to login */
+	FTPD_LIMIT_TOOMANY		/* Too many users logged in */
+} ftpd_limit_status_t;
+
+typedef enum {
+	FTPD_LIMIT_CHECK = 0,	/* Just check to see if a space is available */
+	FTPD_LIMIT_CHECKIN, 	/* user is logging in so count them */
+	FTPD_LIMIT_CHECKOUT		/* user has left the server.. uncount them */
+} ftpd_limit_check_t;
+
+/* masin provider structure */
 typedef struct {
-	const ftpd_hooks_chroot *chroot;
-	const ftpd_hooks_listing *listing;
+	/* Get the chroot directory for the specified user */
+	ftpd_chroot_status_t (*map_chroot)(
+		const request_rec *r,
+		const char **chroot,
+		const char **initroot
+	);
+	ftpd_limit_status_t (*limit_check)(
+		const request_rec *r,
+		ftpd_limit_check_t check_type
+	);
 } ftpd_provider;
 
 typedef struct ftpd_provider_list ftpd_provider_list;
@@ -287,32 +306,6 @@ struct ftpd_provider_list {
 	const char *name;
 	const ftpd_provider *provider;
 	ftpd_provider_list *next;
-};
-
-/* chroot hooks */
-typedef enum {
-	FTPD_CHROOT_USER_FOUND = 0,	/* User is found and chroot has been set */
-	FTPD_CHROOT_USER_NOT_FOUND,	/* User not found pass to next provider */
-	FTPD_CHROOT_FAIL				/* Fail the login */
-} ftpd_chroot_status_t;
-
-struct ftpd_hooks_chroot {
-	/* only one hook really needed right? */
-	/* Get the chroot directory for the specified user */
-	ftpd_chroot_status_t (*map_chroot)(
-		const request_rec *r,
-		const char **chroot,
-		const char **initroot
-	);
-};
-
-/* chroot hooks */
-struct ftpd_hooks_listing {
-	/* only one hook really needed right? */
-	/* Get the listing */
-	char * (*get_entry)(
-		const char *name
-	);
 };
 
 #ifdef __cplusplus

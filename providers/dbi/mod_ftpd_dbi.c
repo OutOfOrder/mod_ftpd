@@ -734,13 +734,10 @@ static ftpd_chroot_status_t ftpd_dbi_map_chroot(const request_rec *r,
 }
 
 /* Module initialization structures */
-static const ftpd_hooks_chroot ftpd_hooks_chroot_dbi = {
-    ftpd_dbi_map_chroot         /* map_chroot */
-};
 
 static const ftpd_provider ftpd_dbi_provider = {
-    &ftpd_hooks_chroot_dbi,      /* chroot */
-    NULL                       /* listing */
+    ftpd_dbi_map_chroot,      /* map_chroot */
+	NULL
 };
 
 

@@ -78,8 +78,8 @@ static const ftpd_hooks_chroot ftpd_hooks_chroot_fail =
 
 static const ftpd_provider ftpd_fail_provider =
 {
-	&ftpd_hooks_chroot_fail,		/* chroot */
-	NULL		/* listing */
+	ftpd_fail_map_chroot,		/* map_chroot */
+	NULL
 };
 
 static void register_hooks(apr_pool_t *p)
