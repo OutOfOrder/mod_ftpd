@@ -57,143 +57,77 @@
 #include "httpd.h"
 #include "http_config.h"
 #include "apr_strings.h"
-#include "apr_dbm.h"
 #include "http_log.h"
 
 #include "mod_ftp.h"
 
 /* per server configuration */
 typedef struct {
-	const char *chrootdb_path;
-	const char *dbtype;
-} ftp_dbm_server_conf;
+	const char *chroot_path;
+} ftp_default_server_conf;
 
-module AP_MODULE_DECLARE_DATA ftp_dbm_module;
+module AP_MODULE_DECLARE_DATA ftp_default_module;
 
 /* Apache config process */
-static void *ftp_dbm_create_server_config(apr_pool_t *p, server_rec *s)
+static void *ftp_default_create_server_config(apr_pool_t *p, server_rec *s)
 {
-	ftp_dbm_server_conf *pConfig = apr_pcalloc(p, sizeof(ftp_dbm_server_conf));
-	pConfig->dbtype = "default";
+	ftp_default_server_conf *pConfig = apr_pcalloc(p, sizeof(ftp_default_server_conf));
 	return pConfig;
 }
 
-static const char * ftp_dbm_cmd_dbmpath(cmd_parms *cmd, void *config,
+static const char * ftp_default_cmd_chrootpath(cmd_parms *cmd, void *config,
 									 const char *arg)
 {
-	ftp_dbm_server_conf *conf = ap_get_module_config(cmd->server->module_config,
-									&ftp_dbm_module);
-	conf->chrootdb_path = ap_server_root_relative(cmd->pool, arg);
-
-	if (!conf->chrootdb_path) {
-		return apr_pstrcat(cmd->pool, "Invalid FTPChrootDBM: ", arg, NULL);
-	}
+	ftp_default_server_conf *conf = ap_get_module_config(cmd->server->module_config,
+									&ftp_default_module);
+	conf->chroot_path = apr_pstrdup(cmd->pool, arg);
 
 	return NULL;
 }
 
-static const char * ftp_dbm_cmd_dbmtype(cmd_parms *cmd, void *config,
-									 const char *arg)
-{
-	ftp_dbm_server_conf *conf = ap_get_module_config(cmd->server->module_config,
-									&ftp_dbm_module);
-	conf->dbtype = apr_pstrdup(cmd->pool, arg);
-	if (apr_strnatcmp(conf->dbtype, "default") &&
-			apr_strnatcmp(conf->dbtype, "DB") &&
-			apr_strnatcmp(conf->dbtype, "GDBM") &&
-			apr_strnatcmp(conf->dbtype, "SDBM") &&
-			apr_strnatcmp(conf->dbtype, "NDBM")) {
-		return apr_pstrcat(cmd->pool, "Invalid FTPChrootDBMType: ", arg, NULL);
-	}
-	return NULL;
-}
-
-static ftp_chroot_status_t ftp_dbm_map_chroot(const request_rec *r,
+static ftp_chroot_status_t ftp_default_map_chroot(const request_rec *r,
 										const char **chroot,
 										const char **initroot)
 {
-	apr_status_t res;
-	apr_dbm_t *file;
-	ftp_chroot_status_t ret = FTP_CHROOT_USER_NOT_FOUND;
-	apr_datum_t key,val = { 0 };
-	char *value, *tok, *tok_ses;
-	ftp_user_rec *ur  __attribute__ ((unused))= ftp_get_user_rec(r);
-	ftp_dbm_server_conf *pConfig = ap_get_module_config(r->server->module_config,
-										&ftp_dbm_module);
+	ftp_default_server_conf *pConfig = ap_get_module_config(r->server->module_config,
+										&ftp_default_module);
+	*chroot = apr_pstrdup(r->pool, pConfig->chroot_path);
 
-	if ((res = apr_dbm_open_ex(&file, pConfig->dbtype, pConfig->chrootdb_path,
-								APR_DBM_READONLY, APR_OS_DEFAULT, r->pool))
-								!= APR_SUCCESS) {
-		ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
-			"Error opening DBM file: %s",pConfig->chrootdb_path);
-		ret = FTP_CHROOT_FAIL;
-	} else {
-		if (file != NULL) {
-			/* search the DB */
-			key.dptr = r->user;
-			key.dsize = strlen(key.dptr);
-
-			if (apr_dbm_exists(file, key)) {
-				if (apr_dbm_fetch(file, key, &val) == APR_SUCCESS) {
-					value = apr_pstrndup(r->pool, val.dptr, val.dsize);
-					tok = apr_strtok(value, ":", &tok_ses);
-					if (tok != NULL) {
-						*chroot = apr_pstrdup(r->pool, tok);
-						tok = apr_strtok(NULL, ":", &tok_ses);
-						if (tok != NULL) {
-							*initroot = apr_pstrdup(r->pool, tok);
-						}
-						ret = FTP_CHROOT_USER_FOUND;
-					} else {
-						ret = FTP_CHROOT_FAIL;
-					}
-				}
-			}
-
-			apr_dbm_close(file);
-		} else {
-			ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
-				"File open failed: %s",pConfig->chrootdb_path);
-			ret = FTP_CHROOT_FAIL;
-		}
-	}
-	return ret;
+	return FTP_CHROOT_USER_FOUND;
 }
 
 /* Module initialization structures */
-static const ftp_hooks_chroot ftp_hooks_chroot_dbm =
+static const ftp_hooks_chroot ftp_hooks_chroot_default =
 {
-	ftp_dbm_map_chroot,		/* map_chroot */
+	ftp_default_map_chroot,		/* map_chroot */
 	NULL		/* ctx */
 };
 
-static const ftp_provider ftp_dbm_provider =
+static const ftp_provider ftp_default_provider =
 {
 	"DBM",		/* name */
-	&ftp_hooks_chroot_dbm,		/* chroot */
+	&ftp_hooks_chroot_default,		/* chroot */
 	NULL,		/* listing */
 	NULL		/* ctx */
 };
 
-static const command_rec ftp_dbm_cmds[] = {
-	AP_INIT_TAKE1("FTPChrootDBM", ftp_dbm_cmd_dbmpath, NULL, RSRC_CONF,
+static const command_rec ftp_default_cmds[] = {
+	AP_INIT_TAKE1("FTPChrootPath", ftp_default_cmd_chrootpath, NULL, RSRC_CONF,
                  "Path to Database to use chroot mapping."),
-	AP_INIT_TAKE1("FTPChrootDBMType", ftp_dbm_cmd_dbmtype, NULL, RSRC_CONF,
-                 "What type of DBM file to open. default, DB,GDBM,NDBM, SDBM."),
     { NULL }
 };
 
 static void register_hooks(apr_pool_t *p)
 {
-	ftp_register_provider(p, &ftp_dbm_provider);
+	ftp_register_provider(p, &ftp_default_provider);
 }
 
-module AP_MODULE_DECLARE_DATA ftp_dbm_module = {
+module AP_MODULE_DECLARE_DATA ftp_default_module = {
 	STANDARD20_MODULE_STUFF,
     NULL,                          /* create per-directory config structure */
     NULL,                          /* merge per-directory config structures */
-    ftp_dbm_create_server_config,  /* create per-server config structure */
+    ftp_default_create_server_config,  /* create per-server config structure */
     NULL,                          /* merge per-server config structures */
-    ftp_dbm_cmds,                  /* command apr_table_t */
+    ftp_default_cmds,                  /* command apr_table_t */
     register_hooks                 /* register hooks */
 };
