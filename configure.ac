@@ -45,4 +45,6 @@ fi
 
 dnl Write config.status and the Makefile
 
-AC_OUTPUT(Makefile)
+AC_OUTPUT(Makefile
+    docs/Makefile
+    docs/rfc/Makefile)

@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="file://localhost/home/urkle/Documents/DocBook/docbook.css" type="text/css"?>
+<!DOCTYPE article PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN" "/usr/share/sgml/docbook/xml-dtd-4.1.2-1.0-8/docbookx.dtd">
+<article>
+  <articleinfo>
+    <title>mod_ftpd Manual</title>
+    <author>
+      <firstname>Edward</firstname>
+      <surname>Rudd</surname>
+      <affiliation>
+        <address format="linespecific"><email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email></address>
+      </affiliation>
+    </author>
+    <pubdate>2004-01-07</pubdate>
+    <revhistory>
+      <revision>
+        <revnumber>0.9</revnumber>
+        <date>2004-01-07</date>
+        <authorinitials>EMR</authorinitials>
+        <revremark>Initial Conversion from Text to Docbook</revremark>
+      </revision>
+    </revhistory>
+  </articleinfo>
+  <sect1 id="intro">
+    <title>Introduction</title>
+    <para>This is a FTP Protocol Server module for Apache 2.0 and 2.1. It is based loosely on the mod_pop3 code base, so many thanks to the author of mod_pop3. This is still a developmental module, and directives and features may change without notice from release to release. There is a sample configuration provided at the end of this document. </para>
+    <sect2 id="copyright">
+      <title>Copyright and License</title>
+      <para>This document, <emphasis>mod_ftpd Manual</emphasis>, is copyrighted &copy; 2002 by <emphasis>Edward Rudd</emphasis>. Permission is granted to copy and distribute this document so long as it is included with the associated application, mod_ftpd, in source or binary form.</para>
+    </sect2>
+    <sect2 id="credits">
+      <title>Credits / Contributors</title>
+      <para> In this document, I have the pleasure of acknowledging: </para>
+      <itemizedlist>
+        <listitem>
+          <para>Paul Querna <email>chip force-elite.com</email> for testing and bouncing ideas off of.</para>
+        </listitem>
+      </itemizedlist>
+    </sect2>
+    <sect2 id="feedback">
+      <title>Feedback</title>
+      <para>Feedback is most certainly welcome for this document. Send your additions, comments and criticisms to the following email address : <email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email>. </para>
+    </sect2>
+    <sect2 id="translations">
+      <title>Translations</title>
+      <para>Currently I there are no translations of this document. However if you would like to translate this document into other languages please do so and submit them to this email address : <email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email>.</para>
+    </sect2>
+  </sect1>
+  <sect1 id="compiling">
+    <title>Building and Installation</title>
+    <para><orderedlist>
+        <listitem>
+          <para>./configure --with-apxs=/path/to/apxs</para>
+        </listitem>
+        <listitem>
+          <para>make</para>
+        </listitem>
+        <listitem>
+          <para>su -c "make install"</para>
+        </listitem>
+      </orderedlist></para>
+  </sect1>
+  <sect1 id="sampleconfig">
+    <title>Sample Configuration</title>
+    <example>
+      <title>A sample Apaceh 2.0 configuration</title>
+      <programlisting>LoadModule ftpd_module	modules/mod_ftpd.so
+# Load any of the provider modules here (for user specific chroots)
+#LoadModule ftpd_dbm_module       modules/mod_ftpd_dbm.so
+#LoadModule ftpd_dbi_module      modules/mod_ftpd_dbi.so
+#LoadModule ftpd_default_module   modules/mod_ftpd_default.so
+#LoadModule ftpd_fail_module      modules/mod_ftpd_fail.so
+
+Listen 21
+&lt;VirtualHost *:21&gt;
+        DocumentRoot /var/ftp
+        FTPprotocol On
+        FTPShowRealPermissions Off
+        FTPAllowActive On
+        FTPMinPort 1024
+        FTPPaxPort 65535
+        &lt;Directory /var/ftp&gt;
+                AuthUserFile /usr/local/httpd/ftp
+                Anonymous_Authoritative On
+                AuthAuthoritative Off
+                Anonymous_NoUserID Off
+                Anonymous_MustGiveEmail Off
+                Anonymous_VerifyEmail Off
+                Anonymous_LogEmail Off
+                Anonymous anonymous
+                AuthName ftp
+                AuthType Basic
+                require valid-user
+                order allow,deny
+                allow from all
+        &lt;/Directory&gt;
+# only allow changing, retrieving files, and listing on the site
+        &lt;Location /&gt;
+                &lt;LimitExtept CHDIR GET LIST&gt;
+                        deny from all
+                &lt;/LimitExcept&gt;
+        &lt;/Location&gt;
+# allow making directories, listing, chdir, and uploading files. 
+# But don't allow retrieving files.
+        &lt;Location /upload&gt;
+                &lt;LimitExcept LIST PUT MKCOL CHDIR&gt;
+                        deny from all
+                &lt;/LimitExcept&gt;
+        &lt;/Location&gt;
+&lt;/VirtualHost&gt;</programlisting>
+    </example>
+  </sect1>
+  <sect1 id="configuration">
+    <title>Configuration Directives</title>
+    <sect2 id="mainmodule">
+      <title>Main Module Directives</title>
+      <variablelist>
+        <varlistentry>
+          <term>FTPProtocol</term>
+          <listitem>
+            <para>Whether this server is serving the FTP protocol. The default is Off</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FTPShowRealPermissions</term>
+          <listitem>
+            <para>Show Real Permissions of files? the default is Off. When Off files will show as mode 644, and directories as 755.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FTPFakeGroup</term>
+          <listitem>
+            <para>If FTPShowRealPermissions is OFf then this is the group name that is displayed in directory listings. The default is ftp.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FTPFakeUser</term>
+          <listitem>
+            <para>If FTPShowRealPermissions is OFf then this is the user name that is displayed in directory listings. The default is ftp.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FTPAllowActive</term>
+          <listitem>
+            <para>Allow active(PORT) data transfers from the server. The default is On.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FTPAllowFXP</term>
+          <listitem>
+            <para>Allow FXP transfer mode. That is to allow using two control connections to two different server and have them transfer files directly to each other. If this is off then data connections are only allowed to come from the client that has the control connection. The default is Off.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FTPPasvMinPort</term>
+          <listitem>
+            <para>Minimum PASV port to use for Data connections. The default value is 1024. This value must be less than FTPPasvMaxPort.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FTPPasvMaxPort</term>
+          <listitem>
+            <para>Maximum PASV port to use for Data connections. The default value is 65535. This value must be greater than FTPPasvMinPort.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FTPChroot</term>
+          <listitem>
+            <para>This is the chroot provider order to use for determining what chroot dir the user should be locked into. the providers are separate modules that must be loaded after mod_ftps.so (dbm, dbi, default, and fail are included);</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FTPServerAnnounce</term>
+          <listitem>
+            <para>Setting this to Off will prevent the mod_ftpd/VERSION tag from being added to the server header in Apache HTTP requests. This does not change the initial server response when a client connects via FTP to the server. The default value is On.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>&lt;Limit&gt;, &lt;LimitExcept&gt; methods</term>
+          <listitem>
+            <para>To limit what users can and cannot do in directories the Limit and LimitExcept must be used.</para>
+            <variablelist>
+              <varlistentry>
+                <term>CHDIR</term>
+                <listitem>
+                  <para>ability to change into this directory (required for login)</para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>GET</term>
+                <listitem>
+                  <para>ability to download a file</para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>LIST</term>
+                <listitem>
+                  <para>ability to get a directory listing</para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>PUT</term>
+                <listitem>
+                  <para>ability to upload a file</para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>APPEND</term>
+                <listitem>
+                  <para>ability to append to an existing file (either APPE, or STOR with REST)</para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>DELETE</term>
+                <listitem>
+                  <para>ability to delete a file</para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>MKCOL</term>
+                <listitem>
+                  <para>ability to make a directory</para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>XRMD</term>
+                <listitem>
+                  <para>ability to delete a directory</para>
+                </listitem>
+              </varlistentry>
+              <varlistentry>
+                <term>MOVE</term>
+                <listitem>
+                  <para>ability to move files or directories</para>
+                </listitem>
+              </varlistentry>
+            </variablelist>
+          </listitem>
+        </varlistentry>
+      </variablelist>
+    </sect2>
+    <sect2 id="mod_dbm">
+      <title>FTP DBM provider</title>
+      <para>LoadModule ftpd_dbm_module modules/mod_ftpd_dbm.so</para>
+      <variablelist>
+        <varlistentry>
+          <term>FTPChrootDBM</term>
+          <listitem>
+            <para>The filename of the database to use. Can be absolute or relative to the server root.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FTPChrootDBMType</term>
+          <listitem>
+            <para>The type of Database the file is (default,DB,GDBM,NDBM,SDBM)</para>
+          </listitem>
+        </varlistentry>
+      </variablelist>
+    </sect2>
+    <sect2 id="mod_dbi">
+      <title>FTP DBI provider</title>
+      <para>LoadModule ftpd_dbi_module modules/mod_ftpd_dbi.so</para>
+      <para>Documentation to be written.</para>
+    </sect2>
+    <sect2 id="mod_default">
+      <title>FTP Default provider</title>
+      <para>LoadModule ftpd_default_module modules/mod_ftpd_default.so</para>
+      <para>This module is useful to provide a fail-back chroot path if other modules do not provide one for the user attempting to login.</para>
+      <variablelist>
+        <varlistentry>
+          <term>FTPChrootPath</term>
+          <listitem>
+            <para>This is the path that this module will return as the chroot.. It will ALWAYS return this path and no other. The default is empty, and the server will use the DocumentRoot as the chroot.</para>
+          </listitem>
+        </varlistentry>
+      </variablelist>
+    </sect2>
+    <sect2 id="mod_fail">
+      <title>FTP Fail provider</title>
+      <para>LoadModule ftpd_fail_module modules/mod_ftpd_fail.so</para>
+      <para>There is no configuration for this module.. Just add it to FTPChroot and any user that hits this module will immediately fail and not be allowed to login. Use this in a chain of modules and this as a fail-back to deny logins if they do not have a chroot assigned.</para>
+    </sect2>
+  </sect1>
+  <sect1 id="issues">
+    <title>Knwon issues and limitations</title>
+    <para>These are some of the known issues and limitations of the module. Also check the <filename>TODO</filename> file for any issues that did not make their way into this document. And of course, if you feel the urge to actually implement something on my <filename>TODO</filename> list feel free to submit a unified diff patch to the following email address : <email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email>.</para>
+    <itemizedlist>
+      <listitem>
+        <para>This module has been build using <application>Apache</application> 2.0.48. I have had people test it on 2.0.47 and 2.1 CVS HEAD.. But I have not officially tested it on 2.1 yet. When an official release of 2.1 is out, then I will test and modify my module for this branch of <application>Apache</application>.</para>
+      </listitem>
+      <listitem>
+        <para>Transfered files do NOT currently go through apache filters and bucket brigades.. When I figure them out, I will support that feature.. (dynamic FTP content..)</para>
+      </listitem>
+      <listitem>
+        <para>I have not load tested this at all.. So I do not know how well it will stand up to stress testing. Can some people run dkftpbench on this thing?</para>
+      </listitem>
+      <listitem>
+        <para>The code has not been thoroughly tested for security related issues.. However, the code is relatively simple, and all ACL checks go through one function, which passes everything to Apache. The source is also available and can be audited by anyone who wishes to.</para>
+      </listitem>
+      <listitem>
+        <para>I do not support the ABOR command, currently, nor do I check for the Telnet command sequences.. Can someone give me an example client that uses these?</para>
+      </listitem>
+      <listitem>
+        <para>There is code in there for unfinished features, just ignore it.. It will be either finished or removed in future releases.</para>
+      </listitem>
+      <listitem>
+        <para>There are no timeouts of any sort currently.. I am trying to find a portable way of doing it, however the apr_poll functions seem to be of no use as I can not get access to the connection socket.</para>
+      </listitem>
+      <listitem>
+        <para>content providers SHOULD check FTP_PLUGIN_VERSION and if it is not the same bailout and refuse to compile as the API is going to be different.</para>
+      </listitem>
+      <listitem>
+        <para>I need to write documentation on the provider interface. However, the header file <filename>mod_ftpd.h</filename> is quite self documented.</para>
+      </listitem>
+    </itemizedlist>
+  </sect1>
+  <sect1 id="moreinfo">
+    <title>Further Information</title>
+    <para>You can contact me on <ulink url="irc://irc.freenode.net/">irc.freenode.net</ulink> as nick urkle in the #apache-modules channel. Or you can contact me via my <ulink url="http://www.outoforder.ws/">Web Site</ulink>. Or email me at <email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email>. Please put a meaningful subject line, otherwise the e-mail may be deposited in my junk mail folder and possibly never seen by me. Something like, "mod_ftpd patch" would be quite acceptable.. However, "PLEASE READ THIS NOW" is quite unacceptable and will most likely never be read.</para>
+  </sect1>
+</article>
