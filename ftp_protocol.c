@@ -718,41 +718,40 @@ HANDLER_DECLARE(pasv)
 	/* Argument parsing */
 	if (data) { /* EPSV command */
 		family = atoi(buffer);
-		family = (family == 1) ? APR_INET : 
+		switch (family) {
+		case 1:
+			family = APR_INET;
 #		if APR_HAVE_IPV6
-		(family == 2) ? APR_INET6 : 
+		case 2:
+			family = APR_HAVE_IPV6;
 #		endif
-		0;
+		default:
+			ap_rprintf(r, FTP_C_INVALID_PROTO" Unsupported Protocol, use (1,2)\r\n");
+			ap_rflush(r);
+			return FTPD_HANDLER_SERVERERROR;
+		}
 		if (apr_strnatcasecmp(buffer,"ALL")==0) {
 			ur->epsv_lock = 1;
-		} else {
-			switch (family) {
-			case APR_INET:
-#		if APR_HAVE_IPV6
-			case APR_INET6:
-#		endif
-				if (family != local_addr->family) {
-					ap_rprintf(r, FTP_C_INVALID_PROTO" not same protocol as connection, use (%d)\r\n",
-						local_addr->family);
-					ap_rflush(r);
-				}
-				return FTPD_HANDLER_SERVERERROR;
-			default:
-				ap_rprintf(r, FTP_C_INVALID_PROTO" Unsupported Protocol, use (1,2)\r\n");
-				ap_rflush(r);
-				return FTPD_HANDLER_SERVERERROR;
-			}
+		} else if (family != local_addr->family) {
+			ap_rprintf(r, FTP_C_INVALID_PROTO" not same protocol as connection, use (%d)\r\n",
+				local_addr->family);
+			ap_rflush(r);
+			return FTPD_HANDLER_SERVERERROR;
 		}
-	}
+	} /* EPSV */
 	family = local_addr->family;
 /* Assign IP */
 	if ((res = apr_sockaddr_info_get(&listen_addr, ipaddr, family, 0,
 				0, ur->data.p)) != APR_SUCCESS) {
 		ap_rprintf(r,FTP_C_PASVFAIL" Unable to assign socket addresss\r\n");
+		ap_rflush(r);
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	if ((res = apr_socket_create(&ur->data.pasv, family,
 			SOCK_STREAM, APR_PROTO_TCP, ur->data.p)) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_PASVFAIL" Unable to create Socket\r\n");
+		ap_rflush(r);
+		return FTPD_HANDLER_SERVERERROR;
 	}
 /* Bind to server IP and Port */
 	while (--bind_retries) {
@@ -791,7 +790,7 @@ HANDLER_DECLARE(pasv)
 			}
 			ap_rprintf(r,FTP_C_PASVOK" Entering Passive Mode (%s,%d,%d)\r\n",
 				ipaddr, port >> 8, port & 255);
-		} else {
+		} else { // IPV6 */
 			ap_rprintf(r,FTP_C_PASVOK" =127,555,555,555,%d,%d\r\n",
 				port >> 8, port & 255);
 		}
