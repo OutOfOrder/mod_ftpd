@@ -361,8 +361,7 @@ HANDLER_DECLARE(user)
 HANDLER_DECLARE(passwd)
 {
 	char *passwd;
-	int itr;
-	const ftp_provider *provider;
+	ftp_provider_list *current_provider;
 	apr_status_t res;
 	const char *chroot = NULL,*initroot = NULL;
 	ftp_chroot_status_t chroot_ret;
@@ -378,30 +377,36 @@ HANDLER_DECLARE(passwd)
     apr_table_set(r->headers_in, "Authorization", ur->auth_string);
 
 	/* Get chroot mapping */
-	if (!apr_is_empty_array(pConfig->aChrootOrder)) {
-		provider = (ftp_provider *)pConfig->aChrootOrder->elts;
-		for (itr = 0; itr < pConfig->aChrootOrder->nelts; itr++) {
-			if (provider[itr].chroot && provider[itr].chroot->map_chroot) {
-				chroot_ret = provider[itr].chroot->map_chroot(r, 
-						&chroot, &initroot);
-				if (chroot_ret == FTP_CHROOT_USER_FOUND) {
-					ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-						"Chroot set to %s", chroot);
-					break; /* We got one fall out */
-				} else if (chroot_ret == FTP_CHROOT_FAIL) {
-					ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
-						"User denied access to server");
-				} else { /* FTP_CHROOT_USER_NOT_FOUND*/
-					ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-						"User not found in chroot provider. Continuing");
-					continue;  /* User not found check next provider */
-				}
-			} else {
+	current_provider = pConfig->providers;
+	while (current_provider) {
+		const ftp_provider *provider;
+		provider = current_provider->provider;
+
+		if (! provider->chroot) {
+			ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+				"Provider '%s' does not provider chroot mapping.",
+				current_provider->name);
+		} else {
+			ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+				"Check provider %s", current_provider->name);
+			chroot_ret = provider->chroot->map_chroot(r, &chroot, &initroot);
+			if (chroot_ret == FTP_CHROOT_USER_FOUND) {
+				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+					"Chroot set to %s", chroot);
+				break; /* We got one fall out */
+			} else if (chroot_ret == FTP_CHROOT_FAIL) {
 				ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
-					"Provider '%s' does not provider chroot mapping.",
-					provider->name);
+					"User denied access to server");
+				ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed\r\n");
+				ap_rflush(r);
+				/* Bail out immediatly if this occurs */
+				return FTP_QUIT;
+			} else { /* FTP_CHROOT_USER_NOT_FOUND*/
+				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+					"User not found in chroot provider. Continuing");
 			}
 		}
+		current_provider = current_provider->next;
 	}
 
 	if (chroot) {

@@ -169,7 +169,6 @@ static const ftp_hooks_chroot ftp_hooks_chroot_dbm =
 
 static const ftp_provider ftp_dbm_provider =
 {
-	"DBM",		/* name */
 	&ftp_hooks_chroot_dbm,		/* chroot */
 	NULL		/* listing */
 };
@@ -184,7 +183,7 @@ static const command_rec ftp_dbm_cmds[] = {
 
 static void register_hooks(apr_pool_t *p)
 {
-	ap_register_provider(p, FTP_PROVIDER_GROUP, ftp_dbm_provider.name, "0",
+	ap_register_provider(p, FTP_PROVIDER_GROUP, "dbm","0",
 		&ftp_dbm_provider);
 }
 

@@ -12,6 +12,8 @@ AC_ARG_ENABLE(dbm_provider, [  --disable-dbm-provider  Do not compile the dbm pr
 		, enable_dbm_provider=yes)
 AC_ARG_ENABLE(default_provider, [  --disable-default-provider  Do not compile the default provider],
 		, enable_default_provider=yes)
+AC_ARG_ENABLE(fail_provider, [  --disable-fail-provider  Do not compile the fail provider],
+		, enable_fail_provider=yes)
 AC_ARG_ENABLE(dbi_provider, [  --enable-dbi-provider  Ccompile the dbi provider],
 		enable_dbi_provider=yes, )
 
@@ -31,6 +33,10 @@ fi
 
 if test "$enable_default_provider" = yes; then
 	AC_CONFIG_SUBDIRS(providers/default)
+fi
+
+if test "$enable_fail_provider" = yes; then
+	AC_CONFIG_SUBDIRS(providers/fail)
 fi
 
 if test "$enable_dbi_provider" = yes; then

@@ -143,7 +143,6 @@ static void *ftp_create_server_config(apr_pool_t *p, server_rec *s)
 	pConfig->nMaxPort = 65535;
 	pConfig->bRealPerms = 0;
 	pConfig->bAllowPort = 1;
-	pConfig->aChrootOrder = apr_array_make(p, 1, sizeof(ftp_provider *));
 	pConfig->bAnnounce = 1;
 	pConfig->sFakeGroup = "ftp";
 	pConfig->sFakeUser = "ftp";
@@ -305,8 +304,8 @@ static const char *ftp_set_chroot_order(cmd_parms *cmd,
                                     		 void *struct_ptr,
                                      		 const char *arg)
 {
-	ftp_provider *addme;
-	const ftp_provider *lookup;
+	const char *provider_name;
+	ftp_provider_list *newp;
 	ftp_svr_config_rec *pConfig = ap_get_module_config(cmd->server->module_config,
 								&ftp_module);
 
@@ -315,12 +314,29 @@ static const char *ftp_set_chroot_order(cmd_parms *cmd,
 		return err;
 	}
 
-	addme = apr_array_push(pConfig->aChrootOrder);
-	lookup = ap_lookup_provider(FTP_PROVIDER_GROUP, arg, "0");
-	if (!lookup) {
-		return apr_psprintf(cmd->pool, "Chroot Provider '%s' not loaded", arg);
+	if (strcasecmp(arg, "none") == 0) {
+		/* disable all providers */
+		pConfig->providers = NULL;
+		return NULL;
+	} else {
+		provider_name = apr_pstrdup(cmd->pool, arg);
 	}
-	*addme = *lookup;
+	newp = apr_pcalloc(cmd->pool, sizeof(ftp_provider_list));
+	newp->name = provider_name;
+	newp->provider = ap_lookup_provider(FTP_PROVIDER_GROUP, newp->name, "0");
+	if (newp->provider == NULL) {
+		return apr_psprintf(cmd->pool, "Chroot Provider '%s' not loaded", newp->name);
+	}
+	/* add to the list */
+	if (!pConfig->providers) {
+		pConfig->providers = newp;
+	} else {
+		ftp_provider_list *last = pConfig->providers;
+		while (last->next) {
+			last = last->next;
+		}
+		last->next = newp;
+	}
     return NULL;
 }
 

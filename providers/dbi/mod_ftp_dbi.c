@@ -739,7 +739,6 @@ static const ftp_hooks_chroot ftp_hooks_chroot_dbi = {
 };
 
 static const ftp_provider ftp_dbi_provider = {
-	"DBI",						/* name */
     &ftp_hooks_chroot_dbi,      /* chroot */
     NULL                       /* listing */
 };
@@ -859,7 +858,7 @@ static void register_hooks(apr_pool_t * p)
 {
     ap_hook_pre_config(init_ftp_dbi_config, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_post_config(init_ftp_dbi, NULL, NULL, APR_HOOK_MIDDLE);
-	ap_register_provider(p, FTP_PROVIDER_GROUP, ftp_dbi_provider.name, "0",
+	ap_register_provider(p, FTP_PROVIDER_GROUP, "dbi", "0",
 		&ftp_dbi_provider);
 }
 

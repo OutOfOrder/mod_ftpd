@@ -101,7 +101,7 @@ typedef struct {
 	int nMaxPort; /* Maximum PASV port to use */
 	int bRealPerms; /* Show real permissionts in file listing */
 	int bAllowPort; /* Whether to allow the PORT command */
-	apr_array_header_t *aChrootOrder; /* Order of chroot querying */
+	ftp_provider_list *providers; /* Order of chroot querying */
 	int bAnnounce; /* Annount in the server header */
 	int bAllowFXP; /* Allow pasv and port connections from/to machines other than the client */
 	char *sFakeGroup; /* The fake group name to display for listings */

@@ -77,10 +77,10 @@ module.source.files=\
 	ftp_protocol.c\
 	gen_todo.pl\
 	ftp_core.c\
-	providers.c\
 	providers/dbm/mod_ftp_dbm.c\
 	providers/default/mod_ftp_default.c\
-	providers/dbi/mod_ftp_dbi.c
+	providers/dbi/mod_ftp_dbi.c\
+	providers/fail/mod_ftp_fail.c
 
 module.pixmap.name=.
 module.pixmap.type=
@@ -89,14 +89,11 @@ module.pixmap.files=
 
 module.data.name=.
 module.data.type=
-module.data.expanded=0
+module.data.expanded=1
 module.data.files=\
 	Makefile.in\
-	providers/dbm/Makefile.in\
 	configure.ac\
-	providers/dbm/configure.ac\
-	autogen.sh\
-	providers/dbm/autogen.sh
+	autogen.sh
 
 module.help.name=.
 module.help.type=

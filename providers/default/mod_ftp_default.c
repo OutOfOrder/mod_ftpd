@@ -105,7 +105,6 @@ static const ftp_hooks_chroot ftp_hooks_chroot_default =
 
 static const ftp_provider ftp_default_provider =
 {
-	"default",	/* name */
 	&ftp_hooks_chroot_default,		/* chroot */
 	NULL		/* listing */
 };
@@ -118,7 +117,7 @@ static const command_rec ftp_default_cmds[] = {
 
 static void register_hooks(apr_pool_t *p)
 {
-	ap_register_provider(p, FTP_PROVIDER_GROUP, ftp_default_provider.name, "0",
+	ap_register_provider(p, FTP_PROVIDER_GROUP, "default", "0",
 		&ftp_default_provider);
 }
 
