@@ -1,0 +1,17 @@
+Build instructions
+1) ./configure --with-apache=/path/to/apache
+2) make
+3) apxs -a -i -n ftp httpd_ftp.la
+
+a sample config entry
+
+Listen 21
+<VirtualHost *:21>
+   FTPprotocol on
+<directory /tmp/pop>
+   AuthDBMUserFile /usr/local/httpd/pop3
+   AuthName pop3
+   AuthType Basic
+   require valid-user
+</directory>
+</VirtualHost>
