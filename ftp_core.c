@@ -89,6 +89,8 @@
 #include "config.h"
 #endif
 
+int ftp_methods[FTP_M_LAST];
+
 static request_rec *ftp_create_request(ftp_user_rec *ur)
 {
     apr_pool_t *p;
@@ -157,7 +159,8 @@ static int process_ftp_connection(conn_rec *c)
     }
 
 	ap_update_child_status(c->sbh, SERVER_BUSY_READ, NULL);
-	ap_add_output_filter("FTP_COMMAND_OUTPUT",NULL,NULL,c);
+	/* TODO: Create ASCII Filter for command output and TYPE A retreival */
+/*	ap_add_output_filter("FTP_COMMAND_OUTPUT",NULL,NULL,c);*/
 	apr_pool_create(&p, c->pool);
     ur = apr_palloc(p, sizeof(*ur));
     ur->p = p;
@@ -174,8 +177,8 @@ static int process_ftp_connection(conn_rec *c)
 
 	/*TODO: Flow control greeting here CODE 421 then close connection*/
     ap_fprintf(c->output_filters, bb, 
-               "220 %s FTP server ready (Comments to: %s)\r\n",
-               ap_get_server_name(r), r->server->server_admin);
+               FTP_C_GREET" %s FTP server ready ("PACKAGE_NAME"/"PACKAGE_VERSION")\r\n",
+			   ap_get_server_name(r));
     ap_fflush(c->output_filters, bb);
 
     process_ftp_connection_internal(r, bb);
@@ -183,61 +186,17 @@ static int process_ftp_connection(conn_rec *c)
     return OK;
 }
 
-static apr_status_t ftp_command_output_filter(ap_filter_t * f, 
-                                           apr_bucket_brigade * bb)
+static int ftp_init_handler(apr_pool_t *p, apr_pool_t *log, apr_pool_t *ptemp,
+					server_rec *s)
 {
-    apr_bucket *e;
-    apr_status_t rv;
-    const char *buf;
-    const char *pos;
- 
-    APR_BRIGADE_FOREACH(e, bb) {
-        apr_size_t len = e->length;
+	/* Register FTP methods */
+	ftp_methods[FTP_M_RETR] = ap_method_register(p, "RETR");
 
-        if (e->length != 0) {
-            rv = apr_bucket_read(e, &buf, &len, APR_BLOCK_READ);
-            if (rv != APR_SUCCESS) {
-                return rv;
-            }
-            /* We search the data for a LF, if we find one, we split the
-             * bucket so that the LF is the first character in the new
-             * bucket.  We then create a new bucket with a CR and insert
-             * it before the LF bucket.
-             */
-            pos = memchr(buf, APR_ASCII_LF, len);
-            while (pos) {
-                apr_bucket *b = NULL;
-                if ((pos > buf) && (*(pos - 1) != APR_ASCII_CR)) {
-                    /* XXX: won't detect a bare LF at the beginning
-                     * of any bucket not created by this function */
-                    apr_bucket_split(e, pos - buf);
-                    b = apr_bucket_immortal_create("\r", 1, f->c->bucket_alloc);
-                    APR_BUCKET_INSERT_AFTER(e, b);
-                    e = APR_BUCKET_NEXT(e);  /* Skip the inserted bucket */
-                    break;
-                }
-                else if (pos - buf + 1 < len) {
-                    /* there is at least one more char left in the bucket */
-                    if (*(pos + 1) == '.') {
-                        apr_bucket_split(e, pos - buf + 1);
-                        b = apr_bucket_immortal_create(".", 1,
-                                                       f->c->bucket_alloc);
-                        APR_BUCKET_INSERT_AFTER(e, b);
-                        e = APR_BUCKET_NEXT(e);  /* Skip the inserted bucket */
-                        break;
-                    }
-                    pos = memchr(pos+1, APR_ASCII_LF, len-(pos-buf+1));
-                }
-                else {
-                    /* done with this bucket */
-                    break;
-                }
-            }
-        }
-    }
-    return ap_pass_brigade(f->next, bb);
+	/* Add version string to Apache headers */
+	/* TODO: Make coinfigure flag to disable adding in server string */
+	ap_add_version_component(p, PACKAGE_NAME"/"PACKAGE_VERSION);
+	return OK;
 }
-
 
 void ap_ftp_register_handler(char *key, ap_ftp_handler *func, int states,
 							const char *help_text, void *data, apr_pool_t *p)
@@ -273,10 +232,14 @@ static void register_hooks(apr_pool_t *p)
 
     ap_hook_process_connection(process_ftp_connection,NULL,NULL,
 			       APR_HOOK_MIDDLE);
-/* Register input/output filters */
-    ap_register_output_filter("FTP_COMMAND_OUTPUT", ftp_command_output_filter, NULL,
-                              AP_FTYPE_CONNECTION);
+/* For registering ftp methods */
+	ap_hook_post_config(ftp_init_handler, NULL, NULL, APR_HOOK_MIDDLE);
 
+/* Register input/output filters */
+/*    ap_register_output_filter("FTP_COMMAND_OUTPUT", ftp_command_output_filter,
+							  NULL, AP_FTYPE_CONNECTION);
+*/
+/* Everthing below here is registeriny FTP commands handlers */
 /* Authentication Commands */
     ap_ftp_register_handler("USER", ap_ftp_handle_user, FTP_AUTH | FTP_USER_ACK,
 		"<sp> username", NULL, p);  
@@ -323,7 +286,6 @@ static void register_hooks(apr_pool_t *p)
 		"<sp> directory-name", NULL, p);
 	ap_ftp_register_handler("XRMD", NULL, FTP_NOT_IMPLEMENTED,
 		"<sp> directory-name", NULL, p);
-	/* TODO: Check for ASCII transfer mode and return failure for SIZE*/
 	ap_ftp_register_handler("SIZE", ap_ftp_handle_size, FTP_TRANSACTION | FTP_FEATURE,
 		"<sp> path-name", NULL, p);
 	ap_ftp_register_handler("MDTM", ap_ftp_handle_mdtm, FTP_TRANSACTION | FTP_FEATURE,

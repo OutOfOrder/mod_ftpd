@@ -14,7 +14,7 @@ AC_ARG_ENABLE(apachetest, [  --disable-apachetest       Do not try to compile an
 
 
 	AC_REQUIRE([AC_CANONICAL_TARGET])
-	PATH="$with_apache/bin:$with_apache/sbin:$PATH"
+	PATH="$with_apache:$with_apache/bin:$with_apache/sbin:$PATH"
 	AC_PATH_PROG(APXS_BIN, apxs, no, [$PATH])
 	min_apache_version=ifelse([$1], ,1.3.1,$1)
 	AC_MSG_CHECKING(for Apache - version >= $min_apache_version)

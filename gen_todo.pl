@@ -10,9 +10,10 @@ my $todo_header = do { local $/; <TODOFILE> };
 close (TODOFILE);
 open (TODOFILE, "> TODO");
 print TODOFILE $todo_header;
+print "Parsing...";
 while (my $entry = readdir(MYDIR)) {
 	next if (!($entry =~ /\.[ch]$/));
-	print "Parsing $entry.\n";
+	print "$entry...";
 	open(DAFILE, $entry) or die "Unable to open file";
 	my $linenumber = 0;
 	while (my $line = <DAFILE>) {
@@ -22,5 +23,5 @@ while (my $entry = readdir(MYDIR)) {
 	}
 	close(DAFILE);
 }
-
+print "\n";
 closedir(MYDIR);

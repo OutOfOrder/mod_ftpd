@@ -73,7 +73,7 @@
 #include "scoreboard.h"
 
 #include "ftp.h"
-
+extern int ftp_methods[FTP_M_LAST];
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -95,9 +95,9 @@ static int ftp_data_socket_close(ftp_user_rec *ur)
 	return OK;
 }
 
-static int ftp_data_socket_connect(ftp_user_rec *ur,request_rec *r)
+static int ftp_data_socket_connect(ftp_user_rec *ur)
 {
-	apr_status_t res;
+	apr_status_t res=-1;
 	switch (ur->data.type) {
 	case FTP_PIPE_PASV:
 		res = apr_socket_accept(&ur->data.pipe, ur->data.pasv, ur->data.p);
@@ -118,6 +118,25 @@ static int ftp_data_socket_connect(ftp_user_rec *ur,request_rec *r)
 	return res;
 }
 
+static int ftp_check_acl(const char *newpath, request_rec *r) 
+{
+	apr_status_t res;
+	if (newpath) {
+		r->uri = apr_pstrdup(r->pool, newpath);
+	} // else assume uri has already been updated
+
+	if ((res = ap_run_translate_name(r)) != OK) {
+		return res;
+	}
+	if ((res = ap_run_map_to_storage(r)) != OK) {
+		return res;
+	}
+	if ((res = ap_run_access_checker(r)) != OK) {
+		return res;
+	}
+	return APR_SUCCESS;
+}
+
 int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 {
     char *buffer = apr_palloc(r->pool, FTP_STRING_LENGTH);
@@ -128,9 +147,9 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 					&ftp_module);
 
-    r->uri = apr_pstrdup(r->pool, "ftp:");
+    //r->uri = apr_pstrdup(r->pool, "ftp:");
 
-    ap_run_map_to_storage(r);
+    //ap_run_map_to_storage(r);
 
     while (1) {
         int res;
@@ -147,7 +166,7 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 
         if (!handle_func) {
 			arg = ap_getword_white_nc(r->pool, &buffer);
-            ap_rprintf(r, "500 '%s %s': command not understood.\r\n", command, arg);
+            ap_rprintf(r, FTP_C_BADCMD" '%s %s': command not understood.\r\n", command, arg);
             ap_rflush(r);
             invalid_cmd++;
             continue;
@@ -155,11 +174,11 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
         if (!(handle_func->states & ur->state)) {
 			if ((ur->state == FTP_AUTH)||(ur->state == FTP_USER_ACK)) {
 				ur->state = FTP_AUTH;
-				ap_rprintf(r, "530 '%s' Please login with USER and PASS.\r\n",command);
+				ap_rprintf(r, FTP_C_LOGINERR" '%s' Please login with USER and PASS.\r\n",command);
 			} else if (handle_func->states & FTP_TRANS_DATA) {
-				ap_rprintf(r, "425 '%s' Please Specify PASV  or PORT first.\r\n",command);
+				ap_rprintf(r, FTP_C_BADSENDCONN" '%s' Please Specify PASV  or PORT first.\r\n",command);
 			} else if (handle_func->states & FTP_NOT_IMPLEMENTED) {
-				ap_rprintf(r, "502 '%s' Command not implemented on this server.\r\n",command);
+				ap_rprintf(r, FTP_C_CMDNOTIMPL "502 '%s' Command not implemented on this server.\r\n",command);
 			} else {
             	ap_rprintf(r, "500 '%s': command not allowed in this state\r\n", command);
 			}
@@ -181,9 +200,9 @@ int ap_ftp_handle_quit(request_rec *r, char *buffer, void *data)
 					&ftp_module);
 
     if (ur->state & FTP_TRANSACTION) {
-        ap_rprintf(r, "221-FTP Statistics go here.\r\n");
+        ap_rprintf(r, FTP_C_GOODBYE"-FTP Statistics go here.\r\n");
     }
-	ap_rprintf(r, "221 Goodbye.\r\n");
+	ap_rprintf(r, FTP_C_GOODBYE" Goodbye.\r\n");
 
     ap_rflush(r);
     ur->state = FTP_AUTH;
@@ -198,13 +217,13 @@ int ap_ftp_handle_user(request_rec *r, char *buffer, void *data)
 
     user = ap_getword_white_nc(r->pool, &buffer);
     if (!strcmp(user, "")) {
-        ap_rprintf(r, "530 Please login with USER and PASS.\r\n");
+        ap_rprintf(r, FTP_C_LOGINERR" Please login with USER and PASS.\r\n");
         ap_rflush(r);
         return FTP_USER_NOT_ALLOWED;
     }
     r->user = ur->user = apr_pstrdup(ur->p, user); 
 
-    ap_rprintf(r, "331 Password required for %s\r\n", r->user);
+    ap_rprintf(r, FTP_C_GIVEPWORD" Password required for %s.\r\n", r->user);
     ap_rflush(r);    
 	ur->state = FTP_USER_ACK;
 	return OK;
@@ -213,10 +232,9 @@ int ap_ftp_handle_user(request_rec *r, char *buffer, void *data)
 int ap_ftp_handle_passwd(request_rec *r, char *buffer, void *data)
 {
 	char *passwd;
+	apr_status_t res;
 	ftp_user_rec *ur = ap_get_module_config(r->request_config,
 					&ftp_module);
-	/*ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
-								&ftp_module);*/
 
     passwd = apr_psprintf(r->pool, "%s:%s", ur->user,
                           ap_getword_white_nc(r->pool, &buffer));
@@ -225,22 +243,22 @@ int ap_ftp_handle_passwd(request_rec *r, char *buffer, void *data)
 
     apr_table_set(r->headers_in, "Authorization", ur->auth_string);
 
- 	r->uri = apr_pstrdup(r->pool, "/");
-
-	ap_run_translate_name(r);
-    ap_run_map_to_storage(r);
-
-    if (ap_run_check_user_id(r) != OK) {
-        ap_rprintf(r,
-               "530 Login incorrect\r\n");
+	if ((res = ftp_check_acl("/", r))!=OK) {
+		ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed: %d\r\n", res);
+		/* Bail out immediatly if this occurs */
+		return FTP_QUIT;
+	}
+	
+    if ((res = ap_run_check_user_id(r)) != OK) {
+        ap_rprintf(r, FTP_C_LOGINERR" Login incorrect\r\n");
         ap_rflush(r);
         ap_log_rerror(APLOG_MARK, APLOG_ERR|APLOG_NOERRNO, 0, r,
-                      "Unauthorized user tried to log in");
+               "Unauthorized user tried to log in:");
         ur->state = FTP_AUTH;
         return FTP_USER_NOT_ALLOWED;
     }
-
-    ap_rprintf(r, "230 User %s logged in.\r\n", ur->user);
+	ap_run_auth_checker(r);
+    ap_rprintf(r, FTP_C_LOGINOK" User %s logged in.\r\n", ur->user);
     ap_rflush(r);
 	ur->current_directory = apr_pstrdup(ur->p,"/");
 	ur->state = FTP_TRANS_NODATA;
@@ -252,40 +270,44 @@ int ap_ftp_handle_pwd(request_rec *r, char *buffer, void *data)
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 					&ftp_module);
 
-	ap_rprintf(r, "257 \"%s\" is current directory.\r\n",ur->current_directory);
+	ap_rprintf(r, FTP_C_PWDOK" \"%s\" is current directory.\r\n",ur->current_directory);
 
     ap_rflush(r);
     return OK;
 }
 
+
 int ap_ftp_handle_cd(request_rec *r, char *buffer, void *data)
 {
 	char *patharg;  /* incoming directory change */
 	char *newpath;	/* temp space for merged local path */
+	request_rec *subreq __attribute__ ((unused)); /* Sub request for authorization checking */
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 					&ftp_module);
-//	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
-//					&ftp_module);
 
 	if ((int)data==1) {
 		patharg = "..";
 	} else {
     	patharg = ap_getword_white_nc(r->pool, &buffer);
 	}
-	if (apr_filepath_merge((char**)&newpath,ur->current_directory,patharg, 
+	if (apr_filepath_merge(&newpath,ur->current_directory,patharg, 
 			APR_FILEPATH_TRUENAME, r->pool) != APR_SUCCESS) {
-		ap_rprintf(r, "550 invalid root path\r\n");
+		ap_rprintf(r, FTP_C_FILEFAIL" Invalid path.\r\n");
+		ap_rflush(r);
+		return OK;
 	}
-	//translate from local to real filename
-	r->uri	= apr_pstrdup(r->pool,newpath);
-	ap_run_translate_name(r);
-	ap_run_map_to_storage(r);
+
+	if (ftp_check_acl(newpath, r)!=OK) {
+		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
+		ap_rflush(r);
+		return OK;
+	}
 
 	if (!ap_is_directory(r->pool, r->filename)) {
-		ap_rprintf(r, "550 '%s': No such file or directory.\r\n",patharg);
+		ap_rprintf(r, FTP_C_FILEFAIL" '%s': No such file or directory.\r\n",patharg);
 	} else {
 		ur->current_directory = apr_pstrdup(ur->p,newpath);
-		ap_rprintf(r, "250 CWD command successful.\r\n");
+		ap_rprintf(r, FTP_C_CWDOK" CWD command successful.\r\n");
 	}
     ap_rflush(r);
     return OK;
@@ -294,7 +316,6 @@ int ap_ftp_handle_cd(request_rec *r, char *buffer, void *data)
 int ap_ftp_handle_help(request_rec *r, char *buffer, void *data)
 {
 	char *command;
-//	char *temp;
 	int column;
 	apr_hash_index_t* hash_itr;
 	ftp_handler_st *handle_func;
@@ -302,9 +323,9 @@ int ap_ftp_handle_help(request_rec *r, char *buffer, void *data)
 	command = ap_getword_white_nc(r->pool, &buffer);
 	if (command[0]=='\0') {
 		if (!(int)data) { /* HELP */
-			ap_rprintf(r, "214-The following commands are implemented.\r\n");
+			ap_rprintf(r, FTP_C_HELPOK"-The following commands are implemented.\r\n");
 		} else { /* FEAT */
-			ap_rprintf(r, "211-FEAT\r\n");
+			ap_rprintf(r, FTP_C_FEATOK"-FEAT\r\n");
 		}
 		column = 0;
 		for (hash_itr = apr_hash_first(r->pool,ap_ftp_hash); hash_itr;
@@ -314,8 +335,9 @@ int ap_ftp_handle_help(request_rec *r, char *buffer, void *data)
 			ap_ftp_str_toupper(command);
 			if (!(int)data) { /* HELP */
 				column++;
-				ap_rprintf(r,"   %-4s%c",command, 
-					(handle_func->states & FTP_NOT_IMPLEMENTED)?'*':' ');
+				ap_rprintf(r,"   %c%-4s",
+					(handle_func->states & FTP_NOT_IMPLEMENTED)?'*':' ',
+					command);
 				if ((column % 7)==0) {
 					ap_rputs("\r\n",r);
 				}
@@ -329,11 +351,11 @@ int ap_ftp_handle_help(request_rec *r, char *buffer, void *data)
 			if ((column % 7)!=0) {
 				ap_rputs("\r\n",r);
 			}
-			ap_rprintf(r, "214-Use \"HELP command\" to get help for a specific command\r\n");
-			ap_rprintf(r, "214-Command not implemented have a '*' next to them.\r\n");
-			ap_rprintf(r, "214 Send Comments %s.\r\n",r->server->server_admin);
+			ap_rprintf(r, FTP_C_HELPOK"-Use \"HELP command\" to get help for a specific command\r\n");
+			ap_rprintf(r, FTP_C_HELPOK"-Command not implemented have a '*' next to them.\r\n");
+			ap_rprintf(r, FTP_C_HELPOK" Send Comments %s.\r\n",r->server->server_admin);
 		} else { /* FEAT */
-			ap_rprintf(r, "211 END\r\n");
+			ap_rprintf(r, FTP_C_FEATOK" END\r\n");
 		}
 	} else {
 		ap_str_tolower(command);
@@ -341,18 +363,18 @@ int ap_ftp_handle_help(request_rec *r, char *buffer, void *data)
 		/* Str to Upper */
 		ap_ftp_str_toupper(command);
 		if (!handle_func) {
-			ap_rprintf(r, "502 Unknown command %s\r\n",command);
+			ap_rprintf(r, FTP_C_BADHELP" Unknown command %s\r\n",command);
 		} else {
 			if (handle_func->states & FTP_NOT_IMPLEMENTED) {
 				if (handle_func->help_text) {
-					ap_rprintf(r, "214-Syntax: %s %s\r\n",command,handle_func->help_text);
+					ap_rprintf(r, FTP_C_HELPOK"-Syntax: %s %s\r\n",command,handle_func->help_text);
 				}
-				ap_rprintf(r, "214 This command is not implemented on this server.\r\n");
+				ap_rprintf(r, FTP_C_HELPOK" This command is not implemented on this server.\r\n");
 			} else {
 				if (!handle_func->help_text) {
-					ap_rprintf(r, "214 Syntax: %s No Help Available.\r\n",command);
+					ap_rprintf(r, FTP_C_HELPOK" Syntax: %s No Help Available.\r\n",command);
 				} else {
-					ap_rprintf(r, "214 Syntax: %s %s\r\n",command,handle_func->help_text);
+					ap_rprintf(r, FTP_C_HELPOK" Syntax: %s %s\r\n",command,handle_func->help_text);
 				}
 			}
 		}
@@ -363,7 +385,7 @@ int ap_ftp_handle_help(request_rec *r, char *buffer, void *data)
 
 int ap_ftp_handle_syst(request_rec *r, char *buffer, void *data)
 {
-	ap_rputs("215 UNIX Type: L8\r\n",r);
+	ap_rputs(FTP_C_SYSTOK" UNIX Type: L8\r\n",r);
 	ap_rflush(r);
 	return OK;
 }
@@ -371,14 +393,14 @@ int ap_ftp_handle_syst(request_rec *r, char *buffer, void *data)
 int ap_ftp_handle_NOOP(request_rec *r, char *buffer, void *data)
 {
 	if (!data) {
-		ap_rputs("200 Command completed successfully.\r\n",r);
+		ap_rputs(FTP_C_NOOPOK" Command completed successfully.\r\n",r);
 	} else {
 		char *arg = ap_getword_white_nc(r->pool, &buffer);
 		ap_str_tolower(arg);
 		if (!apr_strnatcmp(arg, data)) {
-			ap_rputs("200 Command completed successfully.\r\n",r);
+			ap_rputs(FTP_C_NOOPOK" Command completed successfully.\r\n",r);
 		} else {
-			ap_rputs("504 Invalid argument.\r\n",r);
+			ap_rputs(FTP_C_INVALIDARG" Invalid argument.\r\n",r);
 		}
 	}
 	ap_rflush(r);
@@ -404,11 +426,11 @@ int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data)
 /* Assign IP */
 	if ((res = apr_sockaddr_info_get(&listen_addr,r->connection->local_ip, APR_INET, 1024,
 				0, ur->data.p)) != APR_SUCCESS) {
-		ap_rprintf(r,"451 Unable to assign socket addresss\r\n");
+		ap_rprintf(r,FTP_C_PASVFAIL" Unable to assign socket addresss\r\n");
 	}
 	if ((res = apr_socket_create_ex(&ur->data.pasv, listen_addr->family,
 			SOCK_STREAM, APR_PROTO_TCP, ur->data.p)) != APR_SUCCESS) {
-		ap_rprintf(r, "451 Unable to create Socket\r\n");
+		ap_rprintf(r, FTP_C_PASVFAIL" Unable to create Socket\r\n");
 	}
 /* Bind to server IP and Port */
 	while (--bind_retries) {
@@ -421,7 +443,7 @@ int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data)
 		}
 	}
 	if (!bind_retries)
-		ap_rputs("451 Error Binding to address\r\n", r);
+		ap_rputs(FTP_C_PASVFAIL" Error Binding to address\r\n", r);
 	
 /* open the socket in listen mode and allow 1 queued connection */
 	apr_socket_listen(ur->data.pasv, 1);
@@ -433,7 +455,7 @@ int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data)
 			*temp=',';
 		++temp;
 	}
-	ap_rprintf(r,"227 Entering Passive Mode (%s,%d,%d)\r\n",
+	ap_rprintf(r,FTP_C_PASVOK" Entering Passive Mode (%s,%d,%d)\r\n",
 		ipaddr, port >> 8, port & 255);
 	ap_rflush(r);
 	ur->data.type = FTP_PIPE_PASV;
@@ -451,7 +473,7 @@ int ap_ftp_handle_port(request_rec *r, char *buffer, void *data)
 					&ftp_module);
 
 	if (!pConfig->bAllowPort) {
-		ap_rprintf(r, "502  PORT command not allowed on this server\r\n");
+		ap_rprintf(r, FTP_C_CMDDISABLED" PORT command not allowed on this server\r\n");
 		ap_rflush(r);
 		return OK;
 	}
@@ -461,7 +483,7 @@ int ap_ftp_handle_port(request_rec *r, char *buffer, void *data)
 	ipaddr = apr_psprintf(r->pool, "%d.%d.%d.%d",ip1,ip2,ip3,ip4);
 	apr_sockaddr_info_get(&ur->data.port,ipaddr, APR_INET, (p1<<8)+p2,
 				0, ur->data.p);
-	ap_rprintf(r, "200 Command Successful\r\n");
+	ap_rprintf(r, FTP_C_PORTOK" Command Successful\r\n");
 	ap_rflush(r);
 	ur->data.type = FTP_PIPE_PORT;
 	ur->state = FTP_TRANS_DATA;
@@ -485,9 +507,9 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
 					&ftp_module);
 
-	ap_rputs("150 Opening ASCII mode data connection for file list.\r\n", r);
-	if ((res = ftp_data_socket_connect(ur,r)) != APR_SUCCESS) {
-		ap_rprintf(r, "425 Error accepting connection\r\n");
+	ap_rputs(FTP_C_DATACONN" Opening ASCII mode data connection for file list.\r\n", r);
+	if ((res = ftp_data_socket_connect(ur)) != APR_SUCCESS) {
+		ap_rprintf(r, FTP_C_BADSENDCONN" Error accepting connection\r\n");
 		ap_rflush(r);
 		return OK;
 	}
@@ -504,18 +526,22 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 	apr_filepath_merge(&r->uri, ur->current_directory, buffer,
 		APR_FILEPATH_TRUENAME, r->pool);
 
-	ap_run_translate_name(r);
-	ap_run_map_to_storage(r);
+	if (ftp_check_acl(NULL, r)!=OK) {
+		ap_rprintf(r, FTP_C_PERMDENY"550 Permission Denied.\r\n");
+		ap_rflush(r);
+		ftp_data_socket_close(ur);
+		return OK;
+	}
 
 	if (!ap_is_directory(r->pool, r->filename)) {
-		ap_rprintf(r, "451 Not a directory\r\n");
+		ap_rprintf(r, FTP_C_FILEFAIL" Not a directory\r\n");
 		ap_rflush(r);
 		ftp_data_socket_close(ur);
 		return OK;
 	}
 
 	if (apr_dir_open(&dir, r->filename, ur->data.p)!=APR_SUCCESS) {
-		ap_rprintf(r, "451 Permission Denied\r\n");
+		ap_rprintf(r, FTP_C_FILEFAIL" Error opening directory\r\n");
 		ap_rflush(r);
 		ftp_data_socket_close(ur);
 		return OK;
@@ -588,7 +614,7 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 		apr_socket_send(ur->data.pipe, buff, &res);
 	}
 	apr_dir_close(dir);
-	ap_rputs("226 Transfer complete.\r\n",r);
+	ap_rputs(FTP_C_TRANSFEROK" Transfer complete.\r\n",r);
 	ap_rflush(r);
 	ftp_data_socket_close(ur);
 	return OK;
@@ -604,14 +630,14 @@ int ap_ftp_handle_type(request_rec *r, char *buffer, void *data)
 	if (!apr_strnatcmp(arg, "l8") ||
 			!apr_strnatcmp(arg, "l 8") ||
 			!apr_strnatcmp(arg, "i")) {
-		ap_rprintf(r, "200 Set Binary mode.\r\n");
+		ap_rprintf(r, FTP_C_TYPEOK" Set Binary mode.\r\n");
 		ur->binaryflag = 1;
 	} else if (!apr_strnatcmp(arg, "a") ||
 			!apr_strnatcmp(arg, "a n")) {
-		ap_rprintf(r, "200 Set ASCII mode.\r\n");
+		ap_rprintf(r, FTP_C_TYPEOK" Set ASCII mode.\r\n");
 		ur->binaryflag = 0;
 	} else {
-		ap_rprintf(r, "5 Invalid Argument.\r\n");
+		ap_rprintf(r, FTP_C_INVALIDARG" Invalid Argument.\r\n");
 	}
 	ap_rflush(r);
 	return OK;
@@ -631,28 +657,33 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 	apr_filepath_merge(&r->uri, ur->current_directory, filename,
 			APR_FILEPATH_TRUENAME, r->pool);
 
-	ap_run_translate_name(r);
-	ap_run_map_to_storage(r);
+	if (ftp_check_acl(NULL, r)!=OK) {
+		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
+		ap_rflush(r);
+		ftp_data_socket_close(ur);
+		return OK;
+	}
+
 	/* TODO: hand a subrequest to Apache to retrieve file */
 	if (apr_file_open(&fp, r->filename, APR_READ | APR_SENDFILE_ENABLED,
 			APR_OS_DEFAULT, ur->data.p) != APR_SUCCESS) {
-		ap_rprintf(r, "451 %s: file does not exist\r\n",filename);
+		ap_rprintf(r, FTP_C_FILEFAIL" %s: file does not exist\r\n",filename);
 		ap_rflush(r);
 		ftp_data_socket_close(ur);
 		return OK;
 	}
 	apr_file_info_get(&finfo, APR_FINFO_TYPE | APR_FINFO_SIZE, fp);
 	if (finfo.filetype == APR_DIR) {
-		ap_rprintf(r, "550 %s: not a plain file\r\n",filename);
+		ap_rprintf(r, FTP_C_FILEFAIL" %s: not a plain file\r\n",filename);
 		ap_rflush(r);
 		apr_file_close(fp);
 		ftp_data_socket_close(ur);
 		return OK;
 	}
-	ap_rprintf(r, "150 Opening data connection\r\n");
+	ap_rprintf(r, FTP_C_DATACONN" Opening data connection\r\n");
 	ap_rflush(r);
-	if (ftp_data_socket_connect(ur,r) != APR_SUCCESS) {
-		ap_rprintf(r, "425 Error accepting connection\r\n");
+	if (ftp_data_socket_connect(ur) != APR_SUCCESS) {
+		ap_rprintf(r, FTP_C_BADSENDCONN" Error accepting connection\r\n");
 		ap_rflush(r);
 		apr_file_close(fp);
 		return OK;
@@ -663,7 +694,7 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 	off = 0;
 	apr_socket_sendfile(ur->data.pipe, fp, NULL, &off, &size, 0);
 /* Close verything up */
-	ap_rprintf(r, "226 Transfer complete\r\n");
+	ap_rprintf(r, FTP_C_TRANSFEROK" Transfer complete\r\n");
 	ap_rflush(r);
 	ftp_data_socket_close(ur);
 	apr_file_close(fp);
@@ -678,23 +709,30 @@ int ap_ftp_handle_size(request_rec *r, char *buffer, void *data)
 
 	if (apr_filepath_merge(&r->uri,ur->current_directory,buffer,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
-		ap_rprintf(r, "550 invalid file name\r\n");
+		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
 		ap_rflush(r);
 		return OK;
 	}
 
-	ap_run_translate_name(r);
-	ap_run_map_to_storage(r);
-
+	if (ftp_check_acl(NULL, r)!=OK) {
+		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
+		ap_rflush(r);
+		return OK;
+	}
+	if (!ur->binaryflag) {
+		ap_rprintf(r, FTP_C_FILEFAIL" Could not get file size.\r\n");
+		ap_rflush(r);
+		return OK;		
+	}
 	if (apr_stat(&finfo, r->filename, APR_FINFO_SIZE | APR_FINFO_TYPE, ur->data.p)!=APR_SUCCESS) {
-		ap_rprintf(r, "550 Error stating file\r\n");
+		ap_rprintf(r, FTP_C_FILEFAIL" Error stating file\r\n");
 		ap_rflush(r);
 		return OK;
 	}
 	if (finfo.filetype == APR_DIR) {
-		ap_rprintf(r, "550 %s: not a plain file\r\n", buffer);
+		ap_rprintf(r, FTP_C_FILEFAIL" %s: not a plain file\r\n", buffer);
 	} else {
-		ap_rprintf(r, "213 %"APR_OFF_T_FMT"\r\n",finfo.size);
+		ap_rprintf(r, FTP_C_SIZEOK" %"APR_OFF_T_FMT"\r\n",finfo.size);
 	}
 	ap_rflush(r);
 	return OK;
@@ -707,28 +745,31 @@ int ap_ftp_handle_mdtm(request_rec *r, char *buffer, void *data)
 
 	if (apr_filepath_merge(&r->uri,ur->current_directory,buffer,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
-		ap_rprintf(r, "550 invalid file name\r\n");
+		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
 		ap_rflush(r);
 		return OK;
 	}
 
-	ap_run_translate_name(r);
-	ap_run_map_to_storage(r);
+	if (ftp_check_acl(NULL, r)!=OK) {
+		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
+		ap_rflush(r);
+		return OK;
+	}
 
 	if (apr_stat(&finfo, r->filename, APR_FINFO_MTIME | APR_FINFO_TYPE, ur->data.p)!=APR_SUCCESS) {
-		ap_rprintf(r, "550 Error stating file\r\n");
+		ap_rprintf(r, FTP_C_FILEFAIL" Error stating file\r\n");
 		ap_rflush(r);
 		return OK;
 	}
 	if (finfo.filetype == APR_DIR) {
-		ap_rprintf(r, "550 %s: not a plain file\r\n", buffer);
+		ap_rprintf(r, FTP_C_FILEFAIL" %s: not a plain file\r\n", buffer);
 	} else {
 		char strtime[32];
 		int res;
 		apr_time_exp_t time;
 		apr_time_exp_gmt(&time,finfo.mtime);
 		apr_strftime(strtime, &res, 32, "%Y%m%d%H%M%S", &time);
-		ap_rprintf(r, "213 %s\r\n",strtime);
+		ap_rprintf(r, FTP_C_MDTMOK" %s\r\n",strtime);
 	}
 	ap_rflush(r);
 	return OK;

@@ -92,9 +92,61 @@ typedef struct ftp_handler_st {
 
 #define FTP_STRING_LENGTH 255
 
+/* Handler return codes */
 #define FTP_QUIT                1
 #define FTP_USER_UNKNOWN        2
 #define FTP_USER_NOT_ALLOWED    3
+
+/* FTP Return codes: Shamelessly borrowed from vsftp/ftpcodes.h */
+#define FTP_C_DATACONN		"150"
+
+#define FTP_C_NOOPOK		"200"
+#define FTP_C_TYPEOK		"200"
+#define FTP_C_PORTOK		"200"
+#define FTP_C_UMASKOK		"200"
+#define FTP_C_CHMODOK		"200"
+#define FTP_C_FEATOK		"211"
+#define FTP_C_SIZEOK		"213"
+#define FTP_C_MDTMOK		"213"
+#define FTP_C_HELPOK		"214"
+#define FTP_C_SYSTOK		"215"
+#define FTP_C_GREET			"220"
+#define FTP_C_GOODBYE		"221"
+#define FTP_C_ABOR_NOCONN	"225"
+#define FTP_C_TRANSFEROK	"226"
+#define FTP_C_ABOROK		"226"
+#define FTP_C_PASVOK		"227"
+#define FTP_C_LOGINOK		"230"
+#define FTP_C_CWDOK			"250"
+#define FTP_C_RMDIROK		"250"
+#define FTP_C_DELEOK		"250"
+#define FTP_C_RENAMEOK		"250"
+#define FTP_C_PWDOK			"257"
+#define FTP_C_MKDIROK		"257"
+
+#define FTP_C_GIVEPWORD		"331"
+#define FTP_C_RESTOK		"350"
+#define FTP_C_RNFROK		"350"
+
+#define FTP_C_IDLE_TIMEOUT	"421"
+#define FTP_C_DATA_TIMEOUT	"421"
+#define FTP_C_NOLOGIN		"421"
+#define FTP_C_BADSENDCONN	"425"
+#define FTP_C_BADSENDNET	"426"
+#define FTP_C_BADSENDFILE	"451"
+#define FTP_C_PASVFAIL		"451"
+
+#define FTP_C_BADCMD		"500"
+#define FTP_C_CMDNOTIMPL	"502"
+#define FTP_C_CMDDISABLED	"502"
+#define FTP_C_BADHELP		"502"
+#define FTP_C_NEEDUSER		"503"
+#define FTP_C_NEEDRNFR		"503"
+#define FTP_C_INVALIDARG	"504"
+#define FTP_C_LOGINERR		"530"
+#define FTP_C_FILEFAIL		"550"
+#define FTP_C_PERMDENY		"550"
+#define FTP_C_UPLOADFAIL	"553"
 
 /* Current Data Pipe state */
 typedef enum { FTP_PIPE_NONE, FTP_PIPE_PASV, FTP_PIPE_PORT, FTP_PIPE_OPEN} ftp_pipe_state;
@@ -105,6 +157,12 @@ typedef enum {FTP_AUTH = 1, FTP_USER_ACK = 2, FTP_TRANS_NODATA = 4, FTP_TRANS_DA
 #define FTP_ALL_STATES FTP_AUTH | FTP_USER_ACK | FTP_TRANS_NODATA | FTP_TRANS_DATA
 /* Transaction state is both DATA and NODATA */
 #define FTP_TRANSACTION (FTP_TRANS_NODATA | FTP_TRANS_DATA)
+
+/* FTP methods */
+enum {
+	FTP_M_RETR = 0,
+	FTP_M_LAST
+};
 
 typedef struct ftp_user_rec {
     apr_pool_t *p;

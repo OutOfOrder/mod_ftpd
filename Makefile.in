@@ -9,7 +9,7 @@ HEADERS = \
 	ftp.h \
 	server_config.h
 
-CFLAGS = -Wc,all -Wc,error
+CFLAGS = -Wc,-Wall -Wc,-Werror 
 LDADD = 
 EXTRA_DIST = TODO AUTHORS README NEWS ChangeLog
 
@@ -18,7 +18,7 @@ EXTRA_DIST = TODO AUTHORS README NEWS ChangeLog
 srcdir = @srcdir@
 VPATH = @srcdir@
 
-all: @PACKAGE_NAME@.la
+all: @PACKAGE_NAME@.la TODO
 
 OBJ = $(SOURCES:.c=.o)
 
@@ -28,17 +28,22 @@ SLO = $(SOURCES:.c=.slo)
 
 STD_DIST = install-sh missing mkinstalldirs Makefile.in configure.in configure
 
-TODO: TODO_HEADER $(SOURCE) $(HEADERS)
+TODO: TODO_HEADER $(SOURCES) $(HEADERS)
 	./gen_todo.pl
 
 @PACKAGE_NAME@.la : $(SOURCES)
 	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(CFLAGS) @DEFS@ $(SOURCES) 
 
 install:
-	@APXS_BIN@ -i @PACKAGE_NAME@.la
+	@APXS_BIN@ -i -a -n $(subst mod_,,@PACKAGE_NAME@) @PACKAGE_NAME@.la
+
+update:
+	@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) @PACKAGE_NAME@.la
 
 clean:
 	$(RM) $(OBJ) $(SLO) $(LO) @PACKAGE_NAME@.la
+
+dist:
 
 distclean: clean
 	$(RM) TODO config.status config.log config.h config.h.in \
