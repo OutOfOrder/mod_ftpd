@@ -104,6 +104,14 @@ FTPChrootDBM
 FTPChrootDBMType
 	The type of Database the file is (default,DB,GDBM,NDBM,SDBM)
 
+use the dbmchroot script in the providers/dbm directory to manage the chroot
+database (not currently installed by a make install)
+
+------------------------------
+IV. 2  FTP DBI Chroot provider
+------------------------------
+Documentation to be written
+
 --------------------------------
 V. Known issues and limitations
 --------------------------------
@@ -120,16 +128,17 @@ this branch of Apache.
 * Transfered files do NOT go through apache filters and bucket brigades.. When
 I figure them out, I will support that feature.. (dynamic FTP content..)
 
-* IPv6 Support.. Yup, not in there.. It's in the TODO, I just need to support 
-the extended FTP commands, and then hope it works, as I don't have an IPv6
-network setup to test it on.
+* IPv6 Support.. It's in there now, need people to test it..
 
 * I have not load tested this at all.. So I do not know how well it will stand
-up to stress testing.
+up to stress testing. Can some people run dkftpbench on this thing?
 
 * The code has not been thoroughly tested for security related issues.. However,
 the code is relatively simple, and all ACL checks go through one function, which
-passes everything to Apache, is should be as secure as Apache.
+passes everything to Apache, so it should be as secure as Apache.
+
+* pass (ie. login) and cwd currently use method "GET", and will fail if GET is
+restricted
 
 * I do not support the ABOR command, currently, nor do I check for the Telnet
 command sequences.. Can someone give me an example client that uses these?

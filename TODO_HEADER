@@ -2,5 +2,6 @@ TODO
  * Add in logging
  * Start debugging to get all clients to connect correctly
  * Implement timeouts and Poll (apr_poll)
+ * Make install needs to install mod_ftp.h and DBI providers dbmchroot
 
 /* */

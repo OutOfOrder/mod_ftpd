@@ -780,7 +780,6 @@ HANDLER_DECLARE(list)
 		}
 		if ((int)data==1) { /* NLST */
 			if (entry.filetype != APR_DIR) {
-				/* TODO: Check for too many slashes in arg buffer */
 				if (*buffer!='\0') {
 					apr_snprintf(buff, 128, "%s\r\n", ap_make_full_path(r->pool,buffer, entry.name));
 				} else {

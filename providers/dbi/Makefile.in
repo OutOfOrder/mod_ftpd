@@ -66,7 +66,7 @@ clean:
 distclean: clean
 	$(RM) TODO config.status config.log config.h config.h.in \
 	configure stamp-h stamp-h.in Makefile
-	$(RM) -r autom4te-2.53.cache
+	$(RM) -r autom4te-2.53.cache .libs
 
 DESTDIR = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 DESTTGZ = $(DESTDIR).tar.gz

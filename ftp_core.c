@@ -392,7 +392,6 @@ static void register_hooks(apr_pool_t *p)
 		"<sp> path-name", NULL, p);
 
 /* Transfer mode settings */
-	/* TODO: Support IPV6 PASV hack? */
 	ftp_register_handler("PASV", HANDLER_FUNC(pasv), FTP_TRANSACTION, 
 		"(Set Server into Passive Mode)", NULL, p);
 	/* Unfortunatly needed by some old clients */
@@ -437,7 +436,6 @@ static void register_hooks(apr_pool_t *p)
 	ftp_register_handler("ABOR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Extended Commands for IPv6 support */
-	/* TODO: implement EPRT, and EPSV, RFCed IPV6 support */
 	ftp_register_handler("EPRT", HANDLER_FUNC(port), FTP_TRANSACTION,
 		"<sp> |af|addr|port|", (void *)1, p);
 	ftp_register_handler("EPSV", HANDLER_FUNC(pasv), FTP_TRANSACTION,

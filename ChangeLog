@@ -1,3 +1,9 @@
+0.7: 2003-12-07
+	EPRT, and EPSV commands implimented for IPV6
+	PASV hack for IPV6 implimented (from http://cr.yp.to/ftp/retr.html)
+	rewrote handler request loop to fix memory leakes and better work with ACLs
+	Added dbi provider thanks to Paul Querna.
+
 0.6: 2003-11-29
 	User Chroots are now supported via a provider mechanism allowing plugins to
 		be written to supply the user to chroot mapping. Only one sample 
