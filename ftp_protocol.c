@@ -740,6 +740,12 @@ HANDLER_DECLARE(pasv)
 		}
 	} /* EPSV */
 	family = local_addr->family;
+#if APR_HAVE_IPV6
+	if (family == APR_INET6 && 
+		IN6_IS_ADDR_V4MAPPED((struct in6_addr *)local_addr->ipaddr_ptr)) {
+			family = APR_INET;
+	}
+#endif
 /* Assign IP */
 	if ((res = apr_sockaddr_info_get(&listen_addr, ipaddr, family, 0,
 				0, ur->data.p)) != APR_SUCCESS) {
