@@ -70,7 +70,6 @@ distclean: clean
 
 DESTDIR = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
 DESTTGZ = $(DESTDIR).tar.gz
-dist: $(DISTFILES)
 dist:
 	@rm -rf $(DESTDIR); \
 	list=' $(PROVIDERS_SUBDIRS) $(SUBDIRS)'; \
@@ -90,7 +89,7 @@ dist:
 	tar -zcf $(DESTTGZ) $(DESTDIR)
 	rm -rf $(DESTDIR);
 
-local-dist:
+local-dist: $(DISTFILES)
 	mkdir -p $(DESTDIR)
 	cp -dp --parents $(DISTFILES) $(DESTDIR)
 
