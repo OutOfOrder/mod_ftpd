@@ -116,75 +116,7 @@ apr_hash_t *ap_ftp_hash;
 #define FTP_STRING_LENGTH 255
 #define FTP_IO_BUFFER_MAX 262144 /*524288 1048576 */
 
-/* FTP Return codes: Shamelessly borrowed from vsftp/ftpcodes.h */
-#define FTP_C_DATACONN		"150"
-
-#define FTP_C_NOOPOK		"200"
-#define FTP_C_TYPEOK		"200"
-#define FTP_C_PORTOK		"200"
-#define FTP_C_UMASKOK		"200"
-#define FTP_C_CHMODOK		"200"
-#define FTP_C_FEATOK		"211"
-#define FTP_C_SIZEOK		"213"
-#define FTP_C_MDTMOK		"213"
-#define FTP_C_HELPOK		"214"
-#define FTP_C_SYSTOK		"215"
-#define FTP_C_GREET			"220"
-#define FTP_C_GOODBYE		"221"
-#define FTP_C_ABOR_NOCONN	"225"
-#define FTP_C_TRANSFEROK	"226"
-#define FTP_C_ABOROK		"226"
-#define FTP_C_PASVOK		"227"
-#define FTP_C_EPASVOK		"229"
-#define FTP_C_LOGINOK		"230"
-#define FTP_C_CWDOK			"250"
-#define FTP_C_RMDIROK		"250"
-#define FTP_C_DELEOK		"250"
-#define FTP_C_RENAMEOK		"250"
-#define FTP_C_PWDOK			"257"
-#define FTP_C_MKDIROK		"257"
-
-#define FTP_C_GIVEPWORD		"331"
-#define FTP_C_RESTOK		"350"
-#define FTP_C_RNFROK		"350"
-
-#define FTP_C_IDLE_TIMEOUT	"421"
-#define FTP_C_DATA_TIMEOUT	"421"
-#define FTP_C_NOLOGIN		"421"
-#define FTP_C_BADSENDCONN	"425"
-#define FTP_C_BADSENDNET	"426"
-#define FTP_C_BADSENDFILE	"451"
-#define FTP_C_PASVFAIL		"451"
-
-#define FTP_C_BADCMD		"500"
-#define FTP_C_CMDNOTIMPL	"502"
-#define FTP_C_CMDDISABLED	"502"
-#define FTP_C_BADHELP		"502"
-#define FTP_C_NEEDUSER		"503"
-#define FTP_C_NEEDRNFR		"503"
-#define FTP_C_INVALIDARG	"504"
-#define FTP_C_INVALID_PROTO	"522"
-#define FTP_C_LOGINERR		"530"
-#define FTP_C_FILEFAIL		"550"
-#define FTP_C_PERMDENY		"550"
-#define FTP_C_UPLOADFAIL	"553"
-#define FTP_C_RENAMEFAIL	"553"
-
-/* FTP methods */
-enum {
-	FTP_M_CHDIR = 0,
-	FTP_M_LIST,
-/*	FTP_M_STOU,*/
-	FTP_M_APPEND,
-	FTP_M_XRMD,
-	FTP_M_LAST
-};
-
 int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb);
-
-#define HANDLER_PROTOTYPE request_rec *r, char *buffer, void *data
-
-typedef int ap_ftp_handler(HANDLER_PROTOTYPE);
 
 typedef struct ftp_handler_st {
 	ap_ftp_handler *func;
@@ -192,25 +124,6 @@ typedef struct ftp_handler_st {
 	const char *help_text;
 	void *data;
 } ftp_handler_st;
-
-void ap_ftp_register_handler(char *key, ap_ftp_handler *func, int states,
-							const char *help_text, void *data, apr_pool_t *p);
-
-void ap_ftp_str_toupper(char *str);
-
-#define MOD_PREFIX(name) ftp_##name
-#define MOD_FUNC(name) MOD_PREFIX(name)
-#define MOD_STATIC(type,name) static type MOD_PREFIX(name)
-#define MOD_EXPORT(type,name) type MOD_PREFIX(name)
-#ifdef ALL_STATIC
-#	define MOD_DECLARE(type,name) MOD_STATIC(type, name)
-#else
-#	define MOD_DECLARE(type,name) MOD_EXPORT(type, name)
-#endif
-
-#define HANDLER_PREFIX(name)  handler_##name
-#define HANDLER_FUNC(name)  MOD_FUNC(HANDLER_PREFIX(name))
-#define HANDLER_DECLARE(name) MOD_DECLARE(int,HANDLER_PREFIX(name)) (HANDLER_PROTOTYPE)
 
 HANDLER_DECLARE(quit);
 HANDLER_DECLARE(user);
@@ -220,6 +133,7 @@ HANDLER_DECLARE(cd);
 HANDLER_DECLARE(help);
 HANDLER_DECLARE(syst);
 HANDLER_DECLARE(NOOP);
+HANDLER_DECLARE(clnt);
 HANDLER_DECLARE(pasv);
 HANDLER_DECLARE(port);
 HANDLER_DECLARE(list);

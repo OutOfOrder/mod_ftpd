@@ -88,14 +88,91 @@ extern "C" {
 #define FTP_DECLARE_DATA             __declspec(dllimport)
 #endif
 
-
 /* mod_ftp published internal strcutures */
+
+/* FTP handlers registration */
+#define HANDLER_PROTOTYPE request_rec *r, char *buffer, void *data
+
+#define HANDLER_FUNC(name)  ftp_handler_##name
+#define HANDLER_DECLARE(name) FTP_DECLARE(int) HANDLER_FUNC(name) (HANDLER_PROTOTYPE)
+
+typedef int ap_ftp_handler(HANDLER_PROTOTYPE);
+
+FTP_DECLARE(void) ftp_register_handler(char *key, ap_ftp_handler *func, int states,
+							const char *help_text, void *data, apr_pool_t *p);
+FTP_DECLARE(void) ap_ftp_str_toupper(char *str);
+
+/* FTP Return codes: Shamelessly borrowed from vsftp/ftpcodes.h */
+#define FTP_C_DATACONN		"150"
+
+#define FTP_C_CLNTOK		"200"
+#define FTP_C_NOOPOK		"200"
+#define FTP_C_TYPEOK		"200"
+#define FTP_C_PORTOK		"200"
+#define FTP_C_UMASKOK		"200"
+#define FTP_C_CHMODOK		"200"
+#define FTP_C_FEATOK		"211"
+#define FTP_C_SIZEOK		"213"
+#define FTP_C_MDTMOK		"213"
+#define FTP_C_HELPOK		"214"
+#define FTP_C_SYSTOK		"215"
+#define FTP_C_GREET			"220"
+#define FTP_C_GOODBYE		"221"
+#define FTP_C_ABOR_NOCONN	"225"
+#define FTP_C_TRANSFEROK	"226"
+#define FTP_C_ABOROK		"226"
+#define FTP_C_PASVOK		"227"
+#define FTP_C_EPASVOK		"229"
+#define FTP_C_LOGINOK		"230"
+#define FTP_C_CWDOK			"250"
+#define FTP_C_RMDIROK		"250"
+#define FTP_C_DELEOK		"250"
+#define FTP_C_RENAMEOK		"250"
+#define FTP_C_PWDOK			"257"
+#define FTP_C_MKDIROK		"257"
+
+#define FTP_C_GIVEPWORD		"331"
+#define FTP_C_RESTOK		"350"
+#define FTP_C_RNFROK		"350"
+
+#define FTP_C_IDLE_TIMEOUT	"421"
+#define FTP_C_DATA_TIMEOUT	"421"
+#define FTP_C_NOLOGIN		"421"
+#define FTP_C_BADSENDCONN	"425"
+#define FTP_C_BADSENDNET	"426"
+#define FTP_C_BADSENDFILE	"451"
+#define FTP_C_PASVFAIL		"451"
+
+#define FTP_C_BADCMD		"500"
+#define FTP_C_CMDNOTIMPL	"502"
+#define FTP_C_CMDDISABLED	"502"
+#define FTP_C_BADHELP		"502"
+#define FTP_C_NEEDUSER		"503"
+#define FTP_C_NEEDRNFR		"503"
+#define FTP_C_INVALIDARG	"504"
+#define FTP_C_INVALID_PROTO	"522"
+#define FTP_C_LOGINERR		"530"
+#define FTP_C_FILEFAIL		"550"
+#define FTP_C_PERMDENY		"550"
+#define FTP_C_UPLOADFAIL	"553"
+#define FTP_C_RENAMEFAIL	"553"
+
+/* FTP methods */
+enum {
+	FTP_M_CHDIR = 0,
+	FTP_M_LIST,
+/*	FTP_M_STOU,*/
+	FTP_M_APPEND,
+	FTP_M_XRMD,
+	FTP_M_LAST
+};
 
 /* Handler return codes */
 #define FTP_QUIT                1
 #define FTP_USER_UNKNOWN        2
 #define FTP_USER_NOT_ALLOWED    3
 #define FTP_UPDATE_AUTH			4
+#define FTP_UPDATE_AGENT		5
 
 /* Current Data Pipe state */
 typedef enum {
@@ -107,20 +184,24 @@ typedef enum {
 
 /* connection state */
 typedef enum {
-	FTP_AUTH 			= 0x001,
-	FTP_USER_ACK 		= 0x002,
-	FTP_TRANS_NODATA 	= 0x004,
-	FTP_TRANS_DATA 		= 0x008,
-	FTP_TRANS_RENAME	= 0x010,
-	FTP_EPSV_LOCK		= 0x020,
-	FTP_NOT_IMPLEMENTED = 0x040,
-	FTP_FEATURE 		= 0x080,
-	FTP_HIDE_ARGS		= 0x100
+	FTP_AUTH 			= 0x001, /* The initial connection state */
+	FTP_USER_ACK 		= 0x002, /* a username has been provided, password expected */
+	FTP_TRANS_NODATA 	= 0x004, /* standard transaction state */
+	FTP_TRANS_DATA 		= 0x008, /* a pasv or port or variant has been provided for file transfer */
+	FTP_TRANS_RENAME	= 0x010, /* a from name has been provided, a to name is expected */
+	FTP_EPSV_LOCK		= 0x020, /* Flag: which commands are locked in epsv all state */
+	FTP_NOT_IMPLEMENTED = 0x040, /* Flag: an unimplimented command */
+	FTP_FEATURE 		= 0x080, /* Flag: a Feature listed in FEAT */
+	FTP_HIDE_ARGS		= 0x100, /* Flag: hide arguments in logging */
+	FTP_LOG_COMMAND		= 0x200  /* Flag: log this command in the access log */
 } ftp_state;
 
-/* All States does not contain FTP_NOT_IMPLEMENTED */
+/* All States connection states */
 #define FTP_ALL_STATES FTP_AUTH | FTP_USER_ACK | FTP_TRANS_NODATA \
 	| FTP_TRANS_DATA | FTP_TRANS_RENAME
+/* All command Flags */
+#define FTP_ALL_FLAGS FTP_EPSV_LOCK | FTP_NOT_IMPLEMENTED | FTP_FEATURE \
+	| FTP_HIDE_ARGS | FTP_LOG_COMMAND
 /* Transaction state is both DATA and NODATA */
 #define FTP_TRANSACTION (FTP_TRANS_NODATA | FTP_TRANS_DATA)
 
@@ -146,6 +227,7 @@ typedef struct ftp_user_rec {
 
 	const char *chroot;
 	char *current_directory;
+	char *useragent;
 
 	int binaryflag;
 	int restart_position;
@@ -160,7 +242,7 @@ typedef struct ftp_user_rec {
 
 /* Gets a pointer to the internal session state structure */
 
-ftp_user_rec *ftp_get_user_rec(const request_rec *r);
+FTP_DECLARE(ftp_user_rec) *ftp_get_user_rec(const request_rec *r);
 
 /*
  * HOOK Stuctures

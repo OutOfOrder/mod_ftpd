@@ -310,6 +310,11 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 
        	res = handle_func->func(handler_r, buffer, handle_func->data);
 
+		if (handle_func->states & FTP_LOG_COMMAND) {
+			ap_run_log_transaction(handler_r);			
+		}
+
+		ap_increment_counts(r->connection->sbh, handler_r);
 		ap_update_child_status(r->connection->sbh, SERVER_BUSY_KEEPALIVE, r);
 
 		apr_pool_destroy(handler_r->pool);
@@ -317,8 +322,9 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 			/* Assign to master request_rec for all subreqs */
 			r->user = apr_pstrdup(r->pool, ur->user);
 		    apr_table_set(r->headers_in, "Authorization", ur->auth_string);
-		}
-		if (res == FTP_QUIT) {
+		} else if (res == FTP_UPDATE_AGENT) {
+			apr_table_set(r->headers_in, "User-Agent", ur->useragent);
+		} else if (res == FTP_QUIT) {
             break;
         }
     }
@@ -600,6 +606,15 @@ HANDLER_DECLARE(NOOP)
 	ap_rflush(r);
 	return OK;
 }
+HANDLER_DECLARE(clnt)
+{
+	ftp_user_rec *ur = ftp_get_user_rec(r);
+
+	ur->useragent = apr_pstrdup(ur->p, buffer);
+	ap_rputs(FTP_C_CLNTOK" Command completed successfully.\r\n",r);
+	ap_rflush(r);
+	return FTP_UPDATE_AGENT;
+}
 
 HANDLER_DECLARE(pasv)
 {
@@ -806,6 +821,8 @@ HANDLER_DECLARE(list)
 	/* Set Method */
 	r->method = apr_pstrdup(r->pool,"LIST");
 	r->method_number = ftp_methods[FTP_M_LIST];
+	r->the_request = apr_psprintf(r->pool, "LIST %s", r->uri);
+	ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, r);
 
 	if (ftp_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
@@ -833,6 +850,8 @@ HANDLER_DECLARE(list)
 		flags = APR_FINFO_NAME | APR_FINFO_TYPE | APR_FINFO_SIZE
 			| APR_FINFO_OWNER | APR_FINFO_PROT | APR_FINFO_MTIME;
 	}
+	r->sent_bodyct = 1;
+	r->bytes_sent = 0;
 	nowtime = apr_time_now();
 	while (1) {
 		res = apr_dir_read(&entry,flags,dir);
@@ -909,6 +928,7 @@ HANDLER_DECLARE(list)
 				entry.size, strtime, entry.name);
 		}
 		res = strlen(buff);
+		r->bytes_sent += res;
 		apr_socket_send(ur->data.pipe, buff, &res);
 	}
 	apr_dir_close(dir);
@@ -960,6 +980,8 @@ HANDLER_DECLARE(retr)
 	/* Set Method */
 	r->method = apr_pstrdup(r->pool, "GET");
 	r->method_number = M_GET;
+	r->the_request = apr_psprintf(r->pool, "RETR %s", r->uri);
+	ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, r);
 
 	if (ftp_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
@@ -1007,6 +1029,8 @@ HANDLER_DECLARE(retr)
 	}
 /* Start sending the file */
 	iodone = 0;
+	r->sent_bodyct = 1;
+	r->bytes_sent = 0;
 	while (!iodone) {
 		buffsize = FTP_IO_BUFFER_MAX;
 		res = apr_file_read(fp, buff, &buffsize);
@@ -1017,6 +1041,8 @@ HANDLER_DECLARE(retr)
 			} else {
 				sendbuff = buff;
 			}
+			/* Update bytes sent */
+			r->bytes_sent += buffsize;
 			res = apr_socket_send(ur->data.pipe, sendbuff, &buffsize);
 			if (res != APR_SUCCESS) {
 				ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
@@ -1028,7 +1054,7 @@ HANDLER_DECLARE(retr)
 		} else {
 			iodone = 1;
 		}
-	}
+	}	
 /* Close verything up */
 	ap_rprintf(r, FTP_C_TRANSFEROK" Transfer complete\r\n");
 	ap_rflush(r);
@@ -1148,13 +1174,16 @@ HANDLER_DECLARE(stor)
 		/* Set Method */
 		r->method = apr_pstrdup(r->pool,"APPEND");
 		r->method_number = ftp_methods[FTP_M_APPEND];
+		r->the_request = apr_psprintf(r->pool, "APPEND %s", r->uri);
 	} else {
 /* STORe, error out if the file already exists */
 		flags = APR_WRITE | APR_CREATE | APR_EXCL;
 		/* Set Method */
 		r->method = apr_pstrdup(r->pool,"PUT");
 		r->method_number = M_PUT;
+		r->the_request = apr_psprintf(r->pool, "PUT %s", r->uri);
 	}
+	ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, r);
 
 	if (ftp_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
@@ -1204,6 +1233,8 @@ HANDLER_DECLARE(stor)
 	iodone = 0;
 	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 		"Begginging File transfer");
+	r->sent_bodyct = 1;
+	r->bytes_sent = 0;
 	while (!iodone) {
 		buffsize = FTP_IO_BUFFER_MAX;
 		res = apr_socket_recv(ur->data.pipe, buff, &buffsize);
@@ -1217,6 +1248,7 @@ HANDLER_DECLARE(stor)
 			} else {
 				sendbuff = buff;
 			}
+			r->bytes_sent += buffsize;
 			res = apr_file_write(fp, sendbuff, &buffsize);
 			if (res != APR_SUCCESS) {
 				ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,

@@ -93,7 +93,7 @@ FTPPasvMaxPort
 FTPChroot
 	This is the chroot provider order to use for determining what chroot dir the
 	user should be locked into. the providers are separate modules that must be
-	loaded after mod_ftp.so (mod_ftp_dbm is included);
+	loaded after mod_ftp.so (dbm,dbi, default, and fail are included);
 
 FTPServerAnnounce
 	Setting this to Off will prevent the mod_ftp/VERSION from being added to the
@@ -117,6 +117,7 @@ FTPServerAnnounce
 ------------------------------
 IV. 1  FTP DBM Chroot provider
 ------------------------------
+LoadModule ftp_dbm_module   modules/mod_ftp_dbm.so
 FTPChrootDBM
 	The fielname of the database to use. Can be absolute or relative to the 
 	server root.
@@ -131,6 +132,27 @@ database (not currently installed by a make install)
 IV. 2  FTP DBI Chroot provider
 ------------------------------
 Documentation to be written
+
+LoadModule ftp_dbi_module	modules/mod_ftp_dbi.so
+
+----------------------------------
+IV. 3  FTP default Chroot provider
+----------------------------------
+LoadModule ftp_default_module	modules/mod_ftp_default.so
+
+FTPChrootPath
+	This is the path that this module will return as the chroot.. It will 
+	ALWAYS return this path and no other.  This is useful for a fail-back path.
+
+-------------------------------
+IV. 3  FTP fail Chroot provider
+-------------------------------
+LoadModule ftp_fail_module	modules/mod_ftp_fail.so
+
+There is no configuration for this module.. Just add it to FTPChroot and any
+user that hits this module will immediatly fail and not be allowed to login.
+Use this in a chain of modules and this as a fail-back to deny logins if they 
+do not have a chroot.
 
 --------------------------------
 V. Known issues and limitations

@@ -1,3 +1,9 @@
+0.9: 2003-12-16
+	Added default and fail providers
+	Redid provider registration.
+	Implimented Logging and more transfer tracking
+	Cleaned up published mod_ftp.h
+
 0.8: 2003-12-12
 	updates scoreboard information for mod_status extended display information
 	reworked method names for ACLs, look at the readme and added CHDIR method

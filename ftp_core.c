@@ -281,7 +281,7 @@ FTP_DECLARE(void) ftp_register_handler(char *key, ap_ftp_handler *func, int stat
 }
 
 
-void ap_ftp_str_toupper(char *str)
+FTP_DECLARE(void) ap_ftp_str_toupper(char *str)
 {
 	while (*str) {
 		*str = apr_toupper(*str);
@@ -290,7 +290,7 @@ void ap_ftp_str_toupper(char *str)
 }
 
 
-ftp_user_rec *ftp_get_user_rec(const request_rec *r)
+FTP_DECLARE(ftp_user_rec) *ftp_get_user_rec(const request_rec *r)
 {
 	return ap_get_module_config(r->request_config, &ftp_module);
 }
@@ -377,8 +377,7 @@ static void register_hooks(apr_pool_t *p)
 		"(Get Type of Operating System)", NULL, p);
 	ftp_register_handler("FEAT", HANDLER_FUNC(help), FTP_TRANSACTION,
 		"(list feature extensions)", (void *)1, p);
-	/* TODO: Store CLNT in UserAgent for logging? */
-	ftp_register_handler("CLNT", HANDLER_FUNC(NOOP), FTP_TRANSACTION,
+	ftp_register_handler("CLNT", HANDLER_FUNC(clnt), FTP_TRANSACTION,
 		"<sp> Client User Agent", NULL, p);
 	ftp_register_handler("OPTS", NULL, FTP_NOT_IMPLEMENTED,
 		"<sp> command <sp> options", NULL, p);
@@ -394,13 +393,13 @@ static void register_hooks(apr_pool_t *p)
 		"(Returns Current Directory)", NULL, p);
 	ftp_register_handler("XPWD", HANDLER_FUNC(pwd), FTP_TRANSACTION,
 		"(Returns Current Directory)", NULL, p);
-	ftp_register_handler("MKD", HANDLER_FUNC(mkdir), FTP_TRANSACTION,
+	ftp_register_handler("MKD", HANDLER_FUNC(mkdir), FTP_TRANSACTION | FTP_LOG_COMMAND,
 		"<sp> directory-name", NULL, p);
-	ftp_register_handler("XMKD", HANDLER_FUNC(mkdir), FTP_TRANSACTION,
+	ftp_register_handler("XMKD", HANDLER_FUNC(mkdir), FTP_TRANSACTION | FTP_LOG_COMMAND,
 		"<sp> directory-name", NULL, p);
-	ftp_register_handler("RMD", HANDLER_FUNC(rmdir), FTP_TRANSACTION,
+	ftp_register_handler("RMD", HANDLER_FUNC(rmdir), FTP_TRANSACTION | FTP_LOG_COMMAND,
 		"<sp> directory-name", NULL, p);
-	ftp_register_handler("XRMD", HANDLER_FUNC(rmdir), FTP_TRANSACTION,
+	ftp_register_handler("XRMD", HANDLER_FUNC(rmdir), FTP_TRANSACTION | FTP_LOG_COMMAND,
 		"<sp> directory-name", NULL, p);
 	ftp_register_handler("SIZE", HANDLER_FUNC(size), FTP_TRANSACTION | FTP_FEATURE,
 		"<sp> path-name", NULL, p);
@@ -419,27 +418,27 @@ static void register_hooks(apr_pool_t *p)
 
 /* Directory Listing */
 	/* TODO: support listing of a file with LIST */
-	ftp_register_handler("LIST", HANDLER_FUNC(list), FTP_TRANS_DATA, 
+	ftp_register_handler("LIST", HANDLER_FUNC(list), FTP_TRANS_DATA | FTP_LOG_COMMAND,
 		"[ <sp> path-name ]", NULL, p);
-	ftp_register_handler("NLST", HANDLER_FUNC(list), FTP_TRANS_DATA,
+	ftp_register_handler("NLST", HANDLER_FUNC(list), FTP_TRANS_DATA | FTP_LOG_COMMAND,
 		"[ <sp> path-name ]", (void *)1, p);
 
 /* File Rename */
 	ftp_register_handler("RNFR", HANDLER_FUNC(rename), FTP_TRANSACTION,
 		"<sp> path-name", NULL, p);
-	ftp_register_handler("RNTO", HANDLER_FUNC(rename), FTP_TRANS_RENAME,
+	ftp_register_handler("RNTO", HANDLER_FUNC(rename), FTP_TRANS_RENAME | FTP_LOG_COMMAND,
 		"<sp> path-name", (void *)1, p);
 
 /* File Transfer */
-	ftp_register_handler("RETR", HANDLER_FUNC(retr), FTP_TRANS_DATA, 
+	ftp_register_handler("RETR", HANDLER_FUNC(retr), FTP_TRANS_DATA | FTP_LOG_COMMAND,
 		"<sp> file-name", NULL, p);
-	ftp_register_handler("STOR", HANDLER_FUNC(stor), FTP_TRANS_DATA, 
+	ftp_register_handler("STOR", HANDLER_FUNC(stor), FTP_TRANS_DATA | FTP_LOG_COMMAND,
 		"<sp> file-name", NULL, p);
-	ftp_register_handler("APPE", HANDLER_FUNC(stor), FTP_TRANS_DATA,
+	ftp_register_handler("APPE", HANDLER_FUNC(stor), FTP_TRANS_DATA | FTP_LOG_COMMAND,
 		"<sp> file-name", (void *)1, p);
-	ftp_register_handler("DELE", HANDLER_FUNC(delete), FTP_TRANSACTION,
+	ftp_register_handler("DELE", HANDLER_FUNC(delete), FTP_TRANSACTION | FTP_LOG_COMMAND,
 		"<sp> file-name", NULL, p);
-	ftp_register_handler("REST", HANDLER_FUNC(restart), FTP_TRANSACTION, 
+	ftp_register_handler("REST", HANDLER_FUNC(restart), FTP_TRANSACTION,
 		"<sp> offset", NULL, p);
 	/* TODO: implement stou (suggested name upload) */
 	ftp_register_handler("STOU", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
