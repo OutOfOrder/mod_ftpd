@@ -96,7 +96,8 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
         {
             break;
         }
-
+		ap_log_rerror(APLOG_MARK, APLOG_NOTICE|APLOG_NOERRNO, 0, r,
+				"C: %s",buffer);
         command = ap_getword_white_nc(r->pool, &buffer);
         ap_str_tolower(command);
         handle_func = apr_hash_get(ap_ftp_hash, command, APR_HASH_KEY_STRING);
@@ -325,8 +326,6 @@ int ap_ftp_handle_NOOP(request_rec *r, char *buffer, void *data)
 
 int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data)
 {
-	char *temp;
-	//ap_listen_rec *lr;
 	apr_sockaddr_t *listen_addr;
 	apr_port_t port;
 	apr_status_t res;
@@ -335,18 +334,21 @@ int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data)
 	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
 					&ftp_module);
 	int bind_retries = 10;
-	char *ipaddr = apr_pstrdup(r->pool, r->connection->local_ip);
+	char *ipaddr,*temp;
 
-/* Assign IP */
-	if ((res = apr_sockaddr_info_get(&listen_addr,ipaddr, APR_INET, 1024,
-				0, r->pool)) != APR_SUCCESS) {
-		ap_rprintf(r,"451 Unable to assign socket addresss\r\n");
-	}
+/* Close old socket if already connected */
 	if (ur->passive_socket != NULL) {
 		apr_socket_close(ur->passive_socket);
 	}
+/* Clear Data connection Pool */
+	apr_pool_clear(ur->datapool);
+/* Assign IP */
+	if ((res = apr_sockaddr_info_get(&listen_addr,r->connection->local_ip, APR_INET, 1024,
+				0, ur->datapool)) != APR_SUCCESS) {
+		ap_rprintf(r,"451 Unable to assign socket addresss\r\n");
+	}
 	if ((res = apr_socket_create_ex(&ur->passive_socket, listen_addr->family,
-			SOCK_STREAM, APR_PROTO_TCP, ur->p)) != APR_SUCCESS) {
+			SOCK_STREAM, APR_PROTO_TCP, ur->datapool)) != APR_SUCCESS) {
 		ap_rprintf(r, "451 Unable to create Socket\r\n");
 	}
 /* Bind to server IP and Port */
@@ -367,7 +369,7 @@ int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data)
 	apr_socket_listen(ur->passive_socket, 1);
 
 /* Change .'s to ,'s */
-	temp = ipaddr;
+	temp = ipaddr = apr_pstrdup(ur->datapool, r->connection->local_ip);
 	while (*temp) {
 		if (*temp=='.')
 			*temp=',';
@@ -389,7 +391,6 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 	apr_int32_t flags;
 	char *path;
 	char buff[128];
-
 	apr_time_exp_t time;
 	apr_time_t nowtime;
  	char *user, *group;
@@ -402,9 +403,9 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 					&ftp_module);
 
 	ap_rputs("150 Opening ASCII mode data connection for file list.\r\n", r);
-	if ((res = apr_socket_accept(&data_sock, ur->passive_socket, r->pool))
+	if ((res = apr_socket_accept(&data_sock, ur->passive_socket, ur->datapool))
 			!=APR_SUCCESS) {
-		apr_strerror(res,buff,256);
+		apr_strerror(res,buff,128);
 		ap_rprintf(r, "425 Error accepting connection: %s\r\n",buff);
 		abor=1;
 	}
@@ -418,14 +419,14 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 	apr_socket_timeout_set(data_sock,apr_time_from_sec(300));
 
 	if (apr_filepath_merge(&path,pConfig->sFtpRoot,(ur->current_directory+1),
-			APR_FILEPATH_TRUENAME, r->pool) != APR_SUCCESS) {
+			APR_FILEPATH_TRUENAME, ur->datapool) != APR_SUCCESS) {
 		ap_rprintf(r, "550 invalid root path\r\n");
 		apr_socket_close(data_sock);
 		ap_rflush(r);
 		return OK;
 	}
 //	ap_rprintf(r, "150 Listing Dir %s\r\n", path);
-	apr_dir_open(&dir, path, r->pool);
+	apr_dir_open(&dir, path, ur->datapool);
 	if ((int)data==1) {
 		flags = APR_FINFO_NAME | APR_FINFO_TYPE;
 	} else {
@@ -450,8 +451,8 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 				apr_strftime(strtime, &res, 64, "%b %d %H:%M", &time);
 			}
 
-			apr_gid_name_get(&group,entry.group,r->pool);
-			apr_uid_name_get(&user,entry.user,r->pool);
+			apr_gid_name_get(&group,entry.group,ur->datapool);
+			apr_uid_name_get(&user,entry.user,ur->datapool);
 			if (pConfig->bRealPerms) {
 				apr_cpystrn(strperms,"----------",11);
 				if (entry.filetype == APR_DIR)
@@ -481,7 +482,7 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 					apr_cpystrn(strperms,"-rw-r--r--",11);
 				}
 			}
-			apr_snprintf(buff, 128, "%s    1 %-8s %-8s %8d %s %s\r\n",
+			apr_snprintf(buff, 128, "%s   1 %-8s %-8s %8d %s %s\r\n",
 				strperms, user, group,
 				(int)entry.size, strtime, entry.name);
 		}
@@ -504,14 +505,16 @@ int ap_ftp_handle_type(request_rec *r, char *buffer, void *data)
 	if (!apr_strnatcmp(arg, "l8") ||
 			!apr_strnatcmp(arg, "l 8") ||
 			!apr_strnatcmp(arg, "i")) {
-		ap_rprintf(r, "200 Set Binary mode.\r\n");
+//		ap_rprintf(r, "200 Set Binary mode.\r\n");
+		ap_rprintf(r, "200 Type set to I.\r\n");
 		ur->binaryflag = 1;
 	} else if (!apr_strnatcmp(arg, "a") ||
 			!apr_strnatcmp(arg, "a n")) {
-		ap_rprintf(r, "200 Set ASCII mode.\r\n");
+//		ap_rprintf(r, "200 Set ASCII mode.\r\n");
+		ap_rprintf(r, "200 Type set to A.\r\n");
 		ur->binaryflag = 0;
 	} else {
-		ap_rprintf(r, "500 Invalid Argument.\r\n");
+		ap_rprintf(r, "5 Invalid Argument.\r\n");
 	}
 	ap_rflush(r);
 	return OK;
@@ -533,7 +536,7 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 					&ftp_module);
 
 	if (apr_filepath_merge(&path,pConfig->sFtpRoot,(ur->current_directory+1),
-			APR_FILEPATH_TRUENAME, r->pool) != APR_SUCCESS) {
+			APR_FILEPATH_TRUENAME, ur->datapool) != APR_SUCCESS) {
 		ap_rprintf(r, "550 invalid root path\r\n");
 		ap_rflush(r);
 		apr_socket_close(ur->passive_socket);
@@ -546,7 +549,7 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 		filename++;
 
 	if (apr_filepath_merge(&filepath,path,filename,
-			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
+			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, ur->datapool) != APR_SUCCESS) {
 		ap_rprintf(r, "550 invalid file name\r\n");
 		ap_rflush(r);
 		apr_socket_close(ur->passive_socket);
@@ -555,7 +558,7 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 		return OK;
 	}
 	if ((res = apr_file_open(&fp, filepath, APR_READ | APR_SENDFILE_ENABLED,
-			APR_OS_DEFAULT, ur->p)) != APR_SUCCESS) {
+			APR_OS_DEFAULT, ur->datapool)) != APR_SUCCESS) {
 		ap_rprintf(r, "550 File does not exists: %s\r\n",filepath);
 		ap_rflush(r);
 		apr_socket_close(ur->passive_socket);
@@ -563,9 +566,19 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 		ur->state = FTP_TRANS_NOPASV;
 		return OK;
 	}
+	/* Check to make sure it's a file */
+	apr_file_info_get(&finfo, APR_FINFO_SIZE | APR_FINFO_TYPE, fp);
+	if (finfo.filetype == APR_DIR) {
+		ap_rprintf(r, "550 %s: not a plain file\r\n",filename);
+		apr_file_close(fp);
+		apr_socket_close(ur->passive_socket);
+		ur->passive_socket=NULL;
+		ap_rflush(r);
+		return OK;
+	}
 	ap_rprintf(r, "150 Opening data connection\r\n");
 	ap_rflush(r);
-	if ((res = apr_socket_accept(&data_sock, ur->passive_socket, r->pool))
+	if ((res = apr_socket_accept(&data_sock, ur->passive_socket, ur->datapool))
 			!=APR_SUCCESS) {
 		apr_strerror(res,buff,128);
 		ap_rprintf(r, "425 Error accepting connection: %s\r\n",buff);
@@ -581,7 +594,6 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 	ur->state = FTP_TRANS_NOPASV;
 	apr_socket_timeout_set(data_sock,apr_time_from_sec(300));
 /* Start sending the file */
-	apr_file_info_get(&finfo, APR_FINFO_SIZE | APR_FINFO_TYPE, fp);
 	res  = finfo.size;
 	off = 0;
 	apr_socket_sendfile(data_sock, fp, NULL, &off, &res, 0);
@@ -589,6 +601,94 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 	ap_rprintf(r, "226 Transfer complete\r\n");
 	apr_socket_close(data_sock);
 	apr_file_close(fp);
+	ap_rflush(r);
+	return OK;
+}
+int ap_ftp_handle_size(request_rec *r, char *buffer, void *data)
+{
+	apr_finfo_t finfo;
+	char *fullpath, *path, *temp;
+	char *filename = apr_pstrdup(r->pool, buffer);
+    ftp_user_rec *ur = ap_get_module_config(r->request_config,
+				&ftp_module);
+	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+					&ftp_module);
+
+	if (apr_filepath_merge(&path,pConfig->sFtpRoot,(ur->current_directory+1),
+			APR_FILEPATH_TRUENAME, ur->datapool) != APR_SUCCESS) {
+		ap_rprintf(r, "550 invalid root path\r\n");
+		ap_rflush(r);
+		return OK;
+	}
+
+	temp = filename;
+	while (*temp=='/')
+		temp++;
+
+	if (apr_filepath_merge(&fullpath,path,temp,
+			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, ur->datapool) != APR_SUCCESS) {
+		ap_rprintf(r, "550 invalid file name\r\n");
+		ap_rflush(r);
+		return OK;
+	}
+
+	if (apr_stat(&finfo, fullpath, APR_FINFO_SIZE | APR_FINFO_TYPE, ur->datapool)!=APR_SUCCESS) {
+		ap_rprintf(r, "550 Error finding file\r\n");
+		ap_rflush(r);
+		return OK;
+	}
+	if (finfo.filetype == APR_DIR) {
+		ap_rprintf(r, "550 %s: not a plain file\r\n", filename);
+	} else {
+		ap_rprintf(r, "213 %d\r\n",(int)finfo.size);
+	}
+	ap_rflush(r);
+	return OK;
+}
+int ap_ftp_handle_mdtm(request_rec *r, char *buffer, void *data)
+{
+	apr_finfo_t finfo;
+	char *fullpath, *path, *temp;
+	char *filename = apr_pstrdup(r->pool, buffer);
+    ftp_user_rec *ur = ap_get_module_config(r->request_config,
+				&ftp_module);
+
+	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+					&ftp_module);
+
+	if (apr_filepath_merge(&path,pConfig->sFtpRoot,(ur->current_directory+1),
+			APR_FILEPATH_TRUENAME, ur->datapool) != APR_SUCCESS) {
+		ap_rprintf(r, "550 invalid root path\r\n");
+		ap_rflush(r);
+		return OK;
+	}
+
+	temp = filename;
+	while (*temp=='/')
+		temp++;
+
+	if (apr_filepath_merge(&fullpath,path,filename,
+			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, ur->datapool) != APR_SUCCESS) {
+		ap_rprintf(r, "550 invalid file name\r\n");
+		ap_rflush(r);
+		return OK;
+	}
+
+	if (apr_stat(&finfo, fullpath, APR_FINFO_MTIME | APR_FINFO_TYPE, ur->datapool)!=APR_SUCCESS) {
+		ap_rprintf(r, "550 Error finding file\r\n");
+		ap_rflush(r);
+		return OK;
+	}
+	if (finfo.filetype == APR_DIR) {
+		ap_rprintf(r, "550 %s: not a plain file\r\n", filename);
+	} else {
+		char strtime[32];
+		int res;
+		apr_time_exp_t time;
+		apr_time_exp_gmt(&time,finfo.mtime);
+		apr_strftime(strtime, &res, 32, "%Y%m%d%H%M%S", &time);
+		ap_rprintf(r, "213 %s\r\n",strtime);
+	}
 	ap_rflush(r);
 	return OK;
 }

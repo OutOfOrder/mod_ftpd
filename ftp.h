@@ -102,7 +102,7 @@ typedef enum {FTP_AUTH = 1, FTP_USER_ACK = 2, FTP_TRANS_NOPASV = 4, FTP_TRANS_PA
 
 typedef struct ftp_user_rec {
     apr_pool_t *p;
-	apr_pool_t *datap;
+	apr_pool_t *datapool; /* pool for Data sockets */
     conn_rec *c;
     request_rec *r;
 
@@ -143,6 +143,8 @@ int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_list(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_type(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data);
+int ap_ftp_handle_size(request_rec *r, char *buffer, void *data);
+int ap_ftp_handle_mdtm(request_rec *r, char *buffer, void *data);
 
 #ifdef __cplusplus
 }

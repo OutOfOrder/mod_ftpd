@@ -177,11 +177,11 @@ static int process_ftp_connection(conn_rec *c)
 	apr_pool_create(&p, c->pool);
     ur = apr_palloc(p, sizeof(*ur));
     ur->p = p;
-	//apr_pool_create(&ur->datap, ur->p);
+	apr_pool_create(&ur->datapool, ur->p);
     ur->c = c;
     ur->state = FTP_AUTH;
 	ur->passive_socket = NULL;
-	ur->binaryflag = 0;
+	ur->binaryflag = 0;	/* Default is ASCII */
 
     bb = apr_brigade_create(ur->p, c->bucket_alloc);
 
@@ -268,7 +268,9 @@ static void register_hooks(apr_pool_t *p)
 		"<sp> directory-name", NULL, p);
 	ap_ftp_register_handler("XRMD", NULL, FTP_NOT_IMPLEMENTED,
 		"<sp> directory-name", NULL, p);
-	ap_ftp_register_handler("SIZE", NULL, FTP_NOT_IMPLEMENTED,
+	ap_ftp_register_handler("SIZE", ap_ftp_handle_size, FTP_TRANSACTION,
+		"<sp> path-name", NULL, p);
+	ap_ftp_register_handler("MDTM", ap_ftp_handle_mdtm, FTP_TRANSACTION,
 		"<sp> path-name", NULL, p);
 
 /* Transfer mode settings */
