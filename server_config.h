@@ -1,3 +1,4 @@
+/* $Header: /home/cvs/httpd-ftp/server_config.h,v 1.2 2003/12/22 06:12:13 urkle Exp $ */
 #include "http_config.h"
 
 
@@ -21,7 +22,8 @@ static const char *ap_set_server_flag_slot(cmd_parms *cmd,
 										   void *struct_ptr, 
 										   int arg)
 {
-	int offset = (int)(long)ap_get_module_config(cmd->server->module_config,
+	int offset = (int)(long)cmd->info;
+	void *ptr = ap_get_module_config(cmd->server->module_config,
 			&MODULE_NAME);
 
     const char *err = ap_check_cmd_context(cmd,NOT_IN_DIR_LOC_FILE|NOT_IN_LIMIT);
@@ -29,7 +31,7 @@ static const char *ap_set_server_flag_slot(cmd_parms *cmd,
 		return err;
 	}
 
-	*(int *)((char *)struct_ptr + offset) = arg ? 1 : 0;
+	*(int *)((char *)ptr + offset) = arg ? 1 : 0;
 
     return NULL;
 }
@@ -40,7 +42,8 @@ static const char *ap_set_server_int_slot(cmd_parms *cmd,
 {
 	char *endptr;
 	char *error_str = NULL;
-	int offset = (int)(long)ap_get_module_config(cmd->server->module_config,
+	int offset = (int)(long)cmd->info;
+	void *ptr = ap_get_module_config(cmd->server->module_config,
 			&MODULE_NAME);
 
     const char *err = ap_check_cmd_context(cmd,NOT_IN_DIR_LOC_FILE|NOT_IN_LIMIT);
@@ -48,7 +51,7 @@ static const char *ap_set_server_int_slot(cmd_parms *cmd,
 		return err;
 	}
 
-	*(int *)(struct_ptr + offset) = strtol(arg, &endptr, 10);
+	*(int *)(ptr + offset) = strtol(arg, &endptr, 10);
 
 	if ((*arg == '\0') || (*endptr != '\0')) {
 		error_str = apr_psprintf(cmd->pool,
@@ -63,7 +66,8 @@ static const char *ap_set_server_string_slot(cmd_parms *cmd,
                                      		 void *struct_ptr,
                                      		 const char *arg)
 {
-	int offset = (int)(long)ap_get_module_config(cmd->server->module_config,
+	int offset = (int)(long)cmd->info;
+	void *ptr = ap_get_module_config(cmd->server->module_config,
 			&MODULE_NAME);
 
 	const char *err = ap_check_cmd_context(cmd,NOT_IN_DIR_LOC_FILE|NOT_IN_LIMIT);
@@ -71,7 +75,7 @@ static const char *ap_set_server_string_slot(cmd_parms *cmd,
 		return err;
 	}
 
-    *(const char **)((char *)struct_ptr + offset) = arg;
+    *(const char **)((char *)ptr + offset) = arg;
     
     return NULL;
 }
@@ -81,7 +85,8 @@ static const char *ap_set_server_string_slot_lower(cmd_parms *cmd,
                                                    const char *arg_)
 {
     char *arg = apr_pstrdup(cmd->pool,arg_);
-	int offset = (int)(long)ap_get_module_config(cmd->server->module_config,
+	int offset = (int)(long)cmd->info;
+	void *ptr = ap_get_module_config(cmd->server->module_config,
 			&MODULE_NAME);
 
 	const char *err = ap_check_cmd_context(cmd,NOT_IN_DIR_LOC_FILE|NOT_IN_LIMIT);
@@ -90,7 +95,7 @@ static const char *ap_set_server_string_slot_lower(cmd_parms *cmd,
 	}
 
     ap_str_tolower(arg);
-    *(char **)((char *)struct_ptr + offset) = arg;
+    *(char **)((char *)ptr + offset) = arg;
     
     return NULL;
 }
@@ -103,7 +108,8 @@ static const char *ap_set_server_file_slot(cmd_parms *cmd, void *struct_ptr,
      * so the server can be moved or mirrored with less pain.
      */
     const char *path;
-	int offset = (int)(long)ap_get_module_config(cmd->server->module_config,
+	int offset = (int)(long)cmd->info;
+	void *ptr = ap_get_module_config(cmd->server->module_config,
 			&MODULE_NAME);
 
 	const char *err = ap_check_cmd_context(cmd,NOT_IN_DIR_LOC_FILE|NOT_IN_LIMIT);
@@ -118,7 +124,7 @@ static const char *ap_set_server_file_slot(cmd_parms *cmd, void *struct_ptr,
                            arg, NULL);
     }
     
-    *(const char **) ((char*)struct_ptr + offset) = path;
+    *(const char **) ((char*)ptr + offset) = path;
 
     return NULL;
 }

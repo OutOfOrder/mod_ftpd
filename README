@@ -177,14 +177,15 @@ up to stress testing. Can some people run dkftpbench on this thing?
 the code is relatively simple, and all ACL checks go through one function, which
 passes everything to Apache, so it should be as secure as Apache.
 
-* pass (ie. login) and cwd currently use method "GET", and will fail if GET is
-restricted
-
 * I do not support the ABOR command, currently, nor do I check for the Telnet
 command sequences.. Can someone give me an example client that uses these?
 
 * There is code in there for unfinished features, just ignore it.. It will be 
 either finished or removed in future releases.
+
+* There are no timeouts of any sort currently.. I'm trying to find a portable
+"apache" way of doing it, however the apr_poll functions seem to be no use as 
+I can't get access to the connection socket.
 
 * content providers SHOULD check FTP_PLUGIN_VERSION and if it's not the same
 bailout and refuse to compile as the API is going to be different.

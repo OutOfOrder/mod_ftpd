@@ -53,6 +53,7 @@
  *
  */
 
+/* $Header: /home/cvs/httpd-ftp/ftp.h,v 1.20 2003/12/22 06:12:12 urkle Exp $ */
 #ifndef FTP_H
 #define FTP_H
 

@@ -53,6 +53,7 @@
  *
  */
 
+/* $Header: /home/cvs/httpd-ftp/Attic/mod_ftp.h,v 1.11 2003/12/22 06:12:13 urkle Exp $ */
 #ifndef _MOD_FTP_H_
 #define _MOD_FTP_H_
 

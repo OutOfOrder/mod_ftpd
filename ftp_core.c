@@ -54,6 +54,7 @@
  */
 
 
+/* $Header: /home/cvs/httpd-ftp/ftp_core.c,v 1.18 2003/12/22 06:12:13 urkle Exp $ */
 /* An FTP Protocol Module for Apache
  * RFC 959 - Primary FTP definition
  * RFC 1123 - Updated refinement of FTP

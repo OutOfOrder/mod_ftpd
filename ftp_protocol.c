@@ -53,6 +53,7 @@
  *
  */
 
+/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.29 2003/12/22 06:12:13 urkle Exp $ */
 #define CORE_PRIVATE
 #include "httpd.h"
 #include "http_protocol.h"
@@ -248,13 +249,13 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
     int invalid_cmd = 0;
     apr_size_t len;
     ftp_handler_st *handle_func;
+	apr_status_t res;
 	request_rec *handler_r;
     ftp_user_rec *ur = ftp_get_user_rec(r);
 
 	r->the_request = apr_pstrdup(r->pool, "IDLE");
 	ap_update_child_status(r->connection->sbh, SERVER_BUSY_KEEPALIVE, r);
     while (1) {
-        int res;
         if ((invalid_cmd > MAX_INVALID_CMD) ||
             ap_rgetline(&buffer, FTP_STRING_LENGTH, &len, r, 0, bb) != APR_SUCCESS)
         {
