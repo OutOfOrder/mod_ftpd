@@ -1,7 +1,7 @@
 Build instructions
 1) ./configure --with-apache=/path/to/apache
 2) make
-3) apxs -a -i -n ftp httpd_ftp.la
+3) su -c "make install"
 
 a sample config entry
 

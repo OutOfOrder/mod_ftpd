@@ -1,8 +1,15 @@
 ## This is the shared library to be built
-lib_LTLIBRARIES = httpd_ftp.la
+lib_LTLIBRARIES = libhttpd_ftp.la
 
 ## Define the source file for the module
-httpd_ftp_la_SOURCES = ftp_module.c
+libhttpd_ftp_la_SOURCES = ftp_module.c ftp_protocol.c
 
 ## Define that an include directory is required.
 INCLUDES = -I@apache_dir@/include 
+
+noinst_HEADERS = ftp.h
+
+install-exec-local:
+	@apache_dir@/bin/apxs -a -i -n ftp libhttpd_ftp.la
+
+install-libLTLIBRARIES:

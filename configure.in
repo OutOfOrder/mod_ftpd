@@ -2,11 +2,11 @@
 AC_INIT
 
 # Automake initialization
-AM_INIT_AUTOMAKE(httpd_ftp, 0.1)
+AM_INIT_AUTOMAKE(libhttpd_ftp, 0.1)
 
 # Add a test for a compiler.
 AC_PROG_CC
-AM_PROG_LIBTOOL
+AC_PROG_LIBTOOL
 
 # Define a macro that is used to parse a --with-apache parameter
 # The macro is named "APACHE_DIR"
