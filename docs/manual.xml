@@ -453,6 +453,9 @@ Listen 21
       <listitem>
         <para>email: <email>&contactemail;</email></para>
       </listitem>
+      <listitem>
+        <para>mailing list: <email>mod_ftpd@lists.outoforder.cc</email> You can subscribe to the mod_ftpd mailing list by sending an e-mail to <email>mod_ftpd-subscribe@lists.outoforder.cc</email>.</para>
+      </listitem>
     </itemizedlist>
     <para>Please use a meaningful subject line for e-mail, otherwise your e-mail may be silently deposited in my junk mail folder by my <acronym>SPAM</acronym> filters and possibly never seen by me. Use something like "mod_ftpd patch to implement feature X" would be quite acceptable, however, "PLEASE READ THIS NOW" is quite unacceptable and will most likely never be read.</para>
   </sect1>
