@@ -865,6 +865,7 @@ HANDLER_DECLARE(port)
 
 HANDLER_DECLARE(list)
 {
+	apr_size_t retsize;
 	apr_status_t res;
 	apr_dir_t *dir;
 	apr_finfo_t entry;
@@ -955,9 +956,9 @@ HANDLER_DECLARE(list)
 		} else { /* LIST */
 			apr_time_exp_lt(&time,entry.mtime);
 			if ( (nowtime - entry.mtime) > apr_time_from_sec(60 * 60 * 24 * 182) ) {
-				apr_strftime(strtime, &res, 16, "%b %d  %Y", &time);
+				apr_strftime(strtime, &retsize, 16, "%b %d  %Y", &time);
 			} else {
-				apr_strftime(strtime, &res, 16, "%b %d %H:%M", &time);
+				apr_strftime(strtime, &retsize, 16, "%b %d %H:%M", &time);
 			}
 			if (pConfig->bRealPerms) {
 				apr_uid_name_get(&user,entry.user,r->pool);
@@ -1008,9 +1009,9 @@ HANDLER_DECLARE(list)
 				strperms, user, group,
 				entry.size, strtime, entry.name);
 		}
-		res = strlen(listline);
-		r->bytes_sent += res;
-		apr_socket_send(ur->data.pipe, listline, &res);
+		retsize = strlen(listline);
+		r->bytes_sent += retsize;
+		apr_socket_send(ur->data.pipe, listline, &retsize);
 	}
 	apr_dir_close(dir);
 	ap_rputs(FTP_C_TRANSFEROK" Transfer complete.\r\n",r);
@@ -1218,10 +1219,10 @@ HANDLER_DECLARE(mdtm)
 		return FTPD_HANDLER_SERVERERROR;
 	} else {
 		char strtime[32];
-		int res;
+		apr_size_t retsize;
 		apr_time_exp_t time;
 		apr_time_exp_gmt(&time,finfo.mtime);
-		apr_strftime(strtime, &res, 32, "%Y%m%d%H%M%S", &time);
+		apr_strftime(strtime, &retsize, 32, "%Y%m%d%H%M%S", &time);
 		ap_rprintf(r, FTP_C_MDTMOK" %s\r\n",strtime);
 		ap_rflush(r);
 		return FTPD_HANDLER_OK;
