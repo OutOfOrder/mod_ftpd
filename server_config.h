@@ -65,7 +65,7 @@ static const char *ap_set_server_int_slot(cmd_parms *cmd,
 		return err;
 	}
 
-	*(int *)(ptr + offset) = strtol(arg, &endptr, 10);
+	*(int *)((char *)ptr + offset) = strtol(arg, &endptr, 10);
 
 	if ((*arg == '\0') || (*endptr != '\0')) {
 		error_str = apr_psprintf(cmd->pool,

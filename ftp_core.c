@@ -271,7 +271,7 @@ FTPD_DECLARE(void) ap_ftpd_str_toupper(char *str)
 }
 
 
-FTPD_DECLARE(ftpd_user_rec) *ftpd_get_user_rec(const request_rec *r)
+FTPD_DECLARE_NONSTD(ftpd_user_rec) *ftpd_get_user_rec(const request_rec *r)
 {
 	return ap_get_module_config(r->request_config, &ftpd_module);
 }

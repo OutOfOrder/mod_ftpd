@@ -57,7 +57,7 @@ extern "C" {
 #define HANDLER_FUNC(name)  ftpd_handler_##name
 #define HANDLER_DECLARE(name) FTPD_DECLARE(int) HANDLER_FUNC(name) (HANDLER_PROTOTYPE)
 
-typedef int ftpd_handler(HANDLER_PROTOTYPE);
+typedef FTPD_DECLARE(int) ftpd_handler(HANDLER_PROTOTYPE);
 
 FTPD_DECLARE(void) ftpd_register_handler(char *key, ftpd_handler *func, int states,
 							const char *help_text, void *data, apr_pool_t *p);
@@ -211,7 +211,7 @@ typedef struct ftpd_user_rec {
 
 /* Gets a pointer to the internal session state structure */
 
-FTPD_DECLARE(ftpd_user_rec) *ftpd_get_user_rec(const request_rec *r);
+FTPD_DECLARE_NONSTD(ftpd_user_rec) *ftpd_get_user_rec(const request_rec *r);
 
 /*
  * FTP Plugins
