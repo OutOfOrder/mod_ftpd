@@ -831,8 +831,10 @@ HANDLER_DECLARE(port)
 		family = apr_atoi64(strfamily);
 		if (family == 1) {
 			family = APR_INET;
+#if APR_HAVE_IPV6
 		} else if (family == 2) {
 			family = APR_INET6;
+#endif
 		} else {
 			ap_rprintf(r, FTP_C_INVALID_PROTO" Unsupported Protocol, use (1,2)\r\n");
 			ap_rflush(r);
