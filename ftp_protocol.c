@@ -763,7 +763,7 @@ HANDLER_DECLARE(port)
 			return OK;
 		}
 	}
-	ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 		"IP connect to client: %d - %s:%d", family, ipaddr, port);
 	apr_sockaddr_info_get(&ur->data.port,ipaddr, family, port,
 				0, ur->data.p);
