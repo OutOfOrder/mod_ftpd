@@ -68,11 +68,11 @@
 #include "http_log.h"
 #include "ap_provider.h"
 
-#include "mod_ftp.h"
+#include "mod_ftpd.h"
 
 #include <dbi/dbi.h>
 
-#define MOD_FTP_DBI_VERSION "0.1"
+#define MOD_FTPD_DBI_VERSION "0.1"
 
 #define DFLT_DBI_NAME "AuthDB"
 #define DFLT_DBI_HOST "localhost"
@@ -122,23 +122,23 @@ enum
     CONF_DBI_OPTIONS
 };
 
-typedef struct ftp_dbi_dconfig
+typedef struct ftpd_dbi_dconfig
 {
     const char *id;
-} ftp_dbi_dconfig;
+} ftpd_dbi_dconfig;
 
-typedef struct ftp_dbi_gconfig
+typedef struct ftpd_dbi_gconfig
 {
     const char *driverdir;
-} ftp_dbi_gconfig;
+} ftpd_dbi_gconfig;
 
 /* This might be a little clumsy but should do for now. */
 
-static ftp_dbi_gconfig dbi_global_config = { NULL };
-static apr_hash_t *ftp_dbi_config_hash;
+static ftpd_dbi_gconfig dbi_global_config = { NULL };
+static apr_hash_t *ftpd_dbi_config_hash;
 static int dbi_conn_count = 0;
 
-typedef struct ftp_dbi_config_rec_struct
+typedef struct ftpd_dbi_config_rec_struct
 {
     const char *dbi_name;
     const char *dbi_user;
@@ -155,21 +155,21 @@ typedef struct ftp_dbi_config_rec_struct
     int conn_max;
     int conn_ttl;
     apr_uint32_t options;
-} ftp_dbi_config_rec;
+} ftpd_dbi_config_rec;
 
-module AP_MODULE_DECLARE_DATA ftp_dbi_module;
+module AP_MODULE_DECLARE_DATA ftpd_dbi_module;
 
-typedef struct ftp_dbi_config_struct
+typedef struct ftpd_dbi_config_struct
 {
     const char name;
     apr_reslist_t *pool;
-    ftp_dbi_config_rec rec;
-} ftp_dbi_config;
+    ftpd_dbi_config_rec rec;
+} ftpd_dbi_config;
 
-typedef struct ftp_dbi_rest_struct
+typedef struct ftpd_dbi_rest_struct
 {
     dbi_conn *conn;
-} ftp_dbi_rest;
+} ftpd_dbi_rest;
 
 typedef const char *conn_id;
 
@@ -178,7 +178,7 @@ static apr_status_t safe_dbi_new_conn(void **resource, void *params,
                                       apr_pool_t * r)
 {
     apr_status_t rv = APR_SUCCESS;
-    ftp_dbi_config_rec *conf = params;
+    ftpd_dbi_config_rec *conf = params;
     int err_num = 0;
     const char *err_str;
     const char *host = conf->dbi_host;
@@ -186,21 +186,21 @@ static apr_status_t safe_dbi_new_conn(void **resource, void *params,
     const char *name = conf->dbi_name;
     const char *user = conf->dbi_user;
     const char *pwd = conf->dbi_pass;
-    ftp_dbi_rest *myres;
+    ftpd_dbi_rest *myres;
 
     dbi_conn_count++;
 
     if (DBI_HARD_MAX_CONNS > dbi_conn_count) {
 
         ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                      "[mod_ftp_dbi.c] Creating New DBI Server Connection");
+                      "[mod_ftpd_dbi.c] Creating New DBI Server Connection");
 
         myres = apr_palloc(r, sizeof(*myres));
 
         myres->conn = dbi_conn_new(driver);
         if (myres->conn == NULL) {
             ap_log_perror(APLOG_MARK, APLOG_EMERG, 0, r,
-                          "[mod_ftp_dbi.c] DBI Connection Failed. dbi_conn_new returned NULL.");
+                          "[mod_ftpd_dbi.c] DBI Connection Failed. dbi_conn_new returned NULL.");
             rv = !APR_SUCCESS;
             /*
              * modules/ssl/ssl_engine_log.c:103
@@ -217,13 +217,13 @@ static apr_status_t safe_dbi_new_conn(void **resource, void *params,
                 err_num = dbi_conn_error(myres->conn, (char **)&err_str);
                 /* Connetion Failed */
                 ap_log_perror(APLOG_MARK, APLOG_ERR, 0, r,
-                              "[mod_ftp_dbi.c] DBI Connection to %s://%s@%s/%s Failed. Error: (%d) %s",
+                              "[mod_ftpd_dbi.c] DBI Connection to %s://%s@%s/%s Failed. Error: (%d) %s",
                               driver, user, host, name, err_num, err_str);
                 rv = !APR_SUCCESS;
             }
             else {
                 ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                              "[mod_ftp_dbi.c] Connection was created sucessfully");
+                              "[mod_ftpd_dbi.c] Connection was created sucessfully");
             }
         }
         *resource = myres;
@@ -231,7 +231,7 @@ static apr_status_t safe_dbi_new_conn(void **resource, void *params,
     else {
         /* Error -- we have too many TOTAL DBI Connections. Maybe a Evil User trying to hurt our system? */
         ap_log_perror(APLOG_MARK, APLOG_ERR, 0, r,
-                      "[mod_ftp_dbi.c] DBI Connection Failed. Hard Max Limit of %d Connections has been reached",
+                      "[mod_ftpd_dbi.c] DBI Connection Failed. Hard Max Limit of %d Connections has been reached",
                       DBI_HARD_MAX_CONNS);
         /* we didn't create a new connection! */
         dbi_conn_count--;
@@ -245,9 +245,9 @@ static apr_status_t safe_dbi_kill_conn(void *resource, void *params,
                                        apr_pool_t * pool)
 {
 /*    dbi_config_rec *conf = params; */
-    ftp_dbi_rest *res = resource;
+    ftpd_dbi_rest *res = resource;
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, pool,
-                  "[mod_ftp_dbi.c] Disconnecting from Server");
+                  "[mod_ftpd_dbi.c] Disconnecting from Server");
     dbi_conn_close(res->conn);
 
     dbi_conn_count--;
@@ -255,10 +255,10 @@ static apr_status_t safe_dbi_kill_conn(void *resource, void *params,
     return APR_SUCCESS;
 }
 
-static ftp_dbi_config *create_new_conf(conn_id conn_id, apr_pool_t * p)
+static ftpd_dbi_config *create_new_conf(conn_id conn_id, apr_pool_t * p)
 {
-    ftp_dbi_config *conf;
-    conf = (ftp_dbi_config *) apr_pcalloc(p, sizeof(ftp_dbi_config));
+    ftpd_dbi_config *conf;
+    conf = (ftpd_dbi_config *) apr_pcalloc(p, sizeof(ftpd_dbi_config));
     if (conf == NULL) {
         return NULL;
     }
@@ -277,17 +277,17 @@ static ftp_dbi_config *create_new_conf(conn_id conn_id, apr_pool_t * p)
     conf->rec.conn_max = DFLT_CONN_MAX;
     conf->rec.conn_ttl = DFLT_CONN_TTL;
     conf->rec.options = DFLT_OPTIONS;
-    apr_hash_set(ftp_dbi_config_hash, conn_id, APR_HASH_KEY_STRING, conf);
+    apr_hash_set(ftpd_dbi_config_hash, conn_id, APR_HASH_KEY_STRING, conf);
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, p,
-                  "[mod_ftp_dbi.c] Creating Config for %s", conn_id);
+                  "[mod_ftpd_dbi.c] Creating Config for %s", conn_id);
     return conf;
 }
 
 static apr_status_t get_or_create_dbi_conf(const char *conn_id,
                                            apr_pool_t * p,
-                                           ftp_dbi_config ** confname)
+                                           ftpd_dbi_config ** confname)
 {
-    ftp_dbi_config *temp;
+    ftpd_dbi_config *temp;
     unsigned int c;
 
     /* some sanity checks on conn_id..limits are liberal and are more or less random */
@@ -299,7 +299,7 @@ static apr_status_t get_or_create_dbi_conf(const char *conn_id,
             return !APR_SUCCESS;
         }
     }
-    temp = apr_hash_get(ftp_dbi_config_hash, conn_id, APR_HASH_KEY_STRING);
+    temp = apr_hash_get(ftpd_dbi_config_hash, conn_id, APR_HASH_KEY_STRING);
     if (temp == NULL) {
         /* no such server yet... */
         temp = create_new_conf(conn_id, p);
@@ -317,9 +317,9 @@ static apr_status_t get_or_create_dbi_conf(const char *conn_id,
 /* with a little help from ap_resolve_env() ;) */
 static const char *populate_querystring(const request_rec * r,
                                  const char *querystring,
-                                 ftp_dbi_config * conf,
-                                 ftp_dbi_dconfig * dconf,
-                                 ftp_dbi_rest * dbi_res, const char *user)
+                                 ftpd_dbi_config * conf,
+                                 ftpd_dbi_dconfig * dconf,
+                                 ftpd_dbi_rest * dbi_res, const char *user)
 {
 
     char tmp[MAX_STRING_LEN];   /* 8 KByte should be enough for everyone :) */
@@ -335,7 +335,7 @@ static const char *populate_querystring(const request_rec * r,
         written += (s - querystring);
         if (written >= MAX_STRING_LEN) {
             ap_log_perror(APLOG_MARK, APLOG_ERR, 0, r->pool,
-                          "[mod_ftp_dbi.c] Populated string would exceed %d bytes",
+                          "[mod_ftpd_dbi.c] Populated string would exceed %d bytes",
                           MAX_STRING_LEN);
             return NULL;
         }
@@ -389,7 +389,7 @@ static const char *populate_querystring(const request_rec * r,
 
             if (e == NULL) {
                 ap_log_perror(APLOG_MARK, APLOG_WARNING, 0, r->pool,
-                              "[mod_ftp_dbi.c] Unknown variable: %s", var);
+                              "[mod_ftpd_dbi.c] Unknown variable: %s", var);
                 return NULL;
             }
             if (p == NULL) {
@@ -398,7 +398,7 @@ static const char *populate_querystring(const request_rec * r,
             written += strlen(p);
             if (written >= MAX_STRING_LEN) {
                 ap_log_perror(APLOG_MARK, APLOG_ERR, 0, r->pool,
-                              "[mod_ftp_dbi.c] Populated string would exceed %d bytes",
+                              "[mod_ftpd_dbi.c] Populated string would exceed %d bytes",
                               MAX_STRING_LEN);
                 free(p);
                 return NULL;
@@ -409,7 +409,7 @@ static const char *populate_querystring(const request_rec * r,
         }
         else {
             ap_log_perror(APLOG_MARK, APLOG_WARNING, 0, r->pool,
-                          "[mod_ftp_dbi.c] Invalid querystring");
+                          "[mod_ftpd_dbi.c] Invalid querystring");
             return NULL;
 
         };
@@ -418,7 +418,7 @@ static const char *populate_querystring(const request_rec * r,
     strcat(tmp, querystring);
     written += strlen(querystring);
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, r->pool,
-                  "[mod_ftp_dbi.c] Populated result: \"%s\" / %d chars written",
+                  "[mod_ftpd_dbi.c] Populated result: \"%s\" / %d chars written",
                   apr_pstrdup(r->pool, tmp), written);
 
     return apr_pstrdup(r->pool, tmp);
@@ -435,7 +435,7 @@ static const char *set_dbi_switch_conf(cmd_parms * cmd, void *config,
                                        const char *conn_id, const char *value)
 {
     apr_ssize_t pos = (apr_ssize_t) cmd->info;
-    ftp_dbi_config *temp;
+    ftpd_dbi_config *temp;
     if ((get_or_create_dbi_conf
          (encap_conn_id(cmd, conn_id), cmd->pool, &temp)) == APR_SUCCESS) {
 
@@ -498,7 +498,7 @@ static const char *set_dbi_driverdir(cmd_parms * cmd, void *config,
 {
     if (dbi_global_config.driverdir != NULL) {
         ap_log_perror(APLOG_MARK, APLOG_WARNING, 0, cmd->pool,
-                      "[mod_ftp_dbi.c] Overwriting previous FtpDbiDriver value with new value %s",
+                      "[mod_ftpd_dbi.c] Overwriting previous FtpDbiDriver value with new value %s",
                       dbi_global_config.driverdir);
     }
     dbi_global_config.driverdir = field;
@@ -508,21 +508,21 @@ static const char *set_dbi_driverdir(cmd_parms * cmd, void *config,
 static const char *set_ddbi_conn(cmd_parms * cmd, void *config,
                                  const char *field)
 {
-    ftp_dbi_config *conf;
+    ftpd_dbi_config *conf;
 
     /* we dont use get_or_create_dbi_conf here because we just look, and don't touch */
     if ((conf =
-         apr_hash_get(ftp_dbi_config_hash, field, APR_HASH_KEY_STRING))) {
-        ((ftp_dbi_dconfig *) config)->id = field;
+         apr_hash_get(ftpd_dbi_config_hash, field, APR_HASH_KEY_STRING))) {
+        ((ftpd_dbi_dconfig *) config)->id = field;
     }
     else {
         ap_log_perror(APLOG_MARK, APLOG_ERR, 0, cmd->pool,
-                      "[mod_ftp_dbi.c] Unknown configuration %s", field);
+                      "[mod_ftpd_dbi.c] Unknown configuration %s", field);
     }
     return NULL;
 }
 
-static const command_rec ftp_dbi_cmds[] = {
+static const command_rec ftpd_dbi_cmds[] = {
 
     /* global config items */
 
@@ -582,36 +582,36 @@ static const command_rec ftp_dbi_cmds[] = {
 };
 
 
-static void *create_ftp_dbi_dir_config(apr_pool_t * p, char *d)
+static void *create_ftpd_dbi_dir_config(apr_pool_t * p, char *d)
 {
-    ftp_dbi_dconfig *conf;
+    ftpd_dbi_dconfig *conf;
     if (d == NULL) {
         return NULL;
     }
-    conf = (ftp_dbi_dconfig *) apr_pcalloc(p, sizeof(ftp_dbi_dconfig));
+    conf = (ftpd_dbi_dconfig *) apr_pcalloc(p, sizeof(ftpd_dbi_dconfig));
     if (conf) {
         conf->id = NULL;
     }
     return conf;
 }
 
-static void *create_ftp_dbi_config(apr_pool_t * p, server_rec * s)
+static void *create_ftpd_dbi_config(apr_pool_t * p, server_rec * s)
 {
     /* TODO: fix this.... this is very bad... */
     return NULL;
 }
 
-static apr_status_t safe_dbi_rel_server(apr_reslist_t * ftp_dbi_pool,
-                                        ftp_dbi_rest * server,
+static apr_status_t safe_dbi_rel_server(apr_reslist_t * ftpd_dbi_pool,
+                                        ftpd_dbi_rest * server,
                                         const request_rec * r)
 {
     apr_status_t rv;
     ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                  "[mod_ftp_dbi.c] Returning Server Connection to DBI Pool");
-    rv = apr_reslist_release(ftp_dbi_pool, (void **) server);
+                  "[mod_ftpd_dbi.c] Returning Server Connection to DBI Pool");
+    rv = apr_reslist_release(ftpd_dbi_pool, (void **) server);
     return rv;
 }
-static int safe_dbi_query(ftp_dbi_rest * mydbi_res, dbi_result * res,
+static int safe_dbi_query(ftpd_dbi_rest * mydbi_res, dbi_result * res,
                           const request_rec * r, const char *query)
 {
     int err_num = 0;
@@ -625,48 +625,48 @@ static int safe_dbi_query(ftp_dbi_rest * mydbi_res, dbi_result * res,
      * APLOG_DEBUG isn't good for this.
      */
     /* ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-     *                   "[mod_ftp_dbi.c] SQL Query: %s", query);
+     *                   "[mod_ftpd_dbi.c] SQL Query: %s", query);
      */
 
 
     if (res == NULL) {
         err_num = dbi_conn_error(mydbi_res->conn, (char **)&err_str);
         ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r,
-                      "[mod_ftp_dbi.c] SQL Query Failed.  DBI said: (%d) %s",
+                      "[mod_ftpd_dbi.c] SQL Query Failed.  DBI said: (%d) %s",
                       err_num, err_str);
     }
     else {
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                      "[mod_ftp_dbi.c] Query Result is good.");
+                      "[mod_ftpd_dbi.c] Query Result is good.");
         error = 0;
     }
     return error;
 }
 
-static ftp_chroot_status_t ftp_dbi_map_chroot(const request_rec *r,
+static ftpd_chroot_status_t ftpd_dbi_map_chroot(const request_rec *r,
                                           const char **ret_chroot,
                                           const char **ret_initroot)
 {
-    ftp_chroot_status_t ARV = FTP_CHROOT_USER_NOT_FOUND;
-    ftp_dbi_config *conf;
+    ftpd_chroot_status_t ARV = FTPD_CHROOT_USER_NOT_FOUND;
+    ftpd_dbi_config *conf;
     const char *query;
     const char *chroot;
-    ftp_dbi_rest *dbi_res;
+    ftpd_dbi_rest *dbi_res;
     dbi_result result;
-    ftp_dbi_dconfig *dconf = ap_get_module_config(r->per_dir_config,
-                                                  &ftp_dbi_module);
+    ftpd_dbi_dconfig *dconf = ap_get_module_config(r->per_dir_config,
+                                                  &ftpd_dbi_module);
 
 
-    conf = apr_hash_get(ftp_dbi_config_hash, dconf->id, APR_HASH_KEY_STRING);
+    conf = apr_hash_get(ftpd_dbi_config_hash, dconf->id, APR_HASH_KEY_STRING);
     if (conf == NULL) {
         ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
-                      "[mod_ftp_dbi.c] - Server Config for \"%s\" was not found",
+                      "[mod_ftpd_dbi.c] - Server Config for \"%s\" was not found",
                       dconf->id);
-        return FTP_CHROOT_FAIL;
+        return FTPD_CHROOT_FAIL;
     }
 
     ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                  "[mod_ftp_dbi.c] Attempting to Acquire DBI Connection");
+                  "[mod_ftpd_dbi.c] Attempting to Acquire DBI Connection");
     apr_reslist_acquire(conf->pool, (void **) &dbi_res);
 
     /* make the query to get the user's password */
@@ -701,32 +701,32 @@ static ftp_chroot_status_t ftp_dbi_map_chroot(const request_rec *r,
                 dbi_result_get_string_copy(result, conf->rec.chroot_field);
             if ((chroot == NULL) || (strcmp(chroot, "ERROR") == 0)) {
                 ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
-                              "[mod_ftp_dbi.c] - libdbi returned an error when retrieving the chroot.");
-                ARV = FTP_CHROOT_FAIL;
+                              "[mod_ftpd_dbi.c] - libdbi returned an error when retrieving the chroot.");
+                ARV = FTPD_CHROOT_FAIL;
             }
             else {
                 // XXXX: Do more checks of the chroot here!
                 *ret_chroot = apr_pstrdup(r->pool, chroot);
-                ARV = FTP_CHROOT_USER_FOUND;
+                ARV = FTPD_CHROOT_USER_FOUND;
             }
         }
         else {
             if (dbi_result_get_numrows(result) == 0) {
-                ARV = FTP_CHROOT_USER_NOT_FOUND;
+                ARV = FTPD_CHROOT_USER_NOT_FOUND;
             }
             else {
                 ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                              "[mod_ftp_dbi.c] %lu row(s) was not returned by dbi_result_get_numrows(result)",
+                              "[mod_ftpd_dbi.c] %lu row(s) was not returned by dbi_result_get_numrows(result)",
                               (unsigned long) dbi_result_get_numrows(result));
-                ARV = FTP_CHROOT_FAIL;
+                ARV = FTPD_CHROOT_FAIL;
             }
         }
         dbi_result_free(result);
     }
     else {
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                      "[mod_ftp_dbi.c] Query Failed!");
-        ARV = FTP_CHROOT_FAIL;
+                      "[mod_ftpd_dbi.c] Query Failed!");
+        ARV = FTPD_CHROOT_FAIL;
     }
 
     safe_dbi_rel_server(conf->pool, dbi_res, r);
@@ -734,22 +734,22 @@ static ftp_chroot_status_t ftp_dbi_map_chroot(const request_rec *r,
 }
 
 /* Module initialization structures */
-static const ftp_hooks_chroot ftp_hooks_chroot_dbi = {
-    ftp_dbi_map_chroot         /* map_chroot */
+static const ftpd_hooks_chroot ftpd_hooks_chroot_dbi = {
+    ftpd_dbi_map_chroot         /* map_chroot */
 };
 
-static const ftp_provider ftp_dbi_provider = {
-    &ftp_hooks_chroot_dbi,      /* chroot */
+static const ftpd_provider ftpd_dbi_provider = {
+    &ftpd_hooks_chroot_dbi,      /* chroot */
     NULL                       /* listing */
 };
 
 
-static apr_status_t init_ftp_dbi_config(apr_pool_t * pconf,
+static apr_status_t init_ftpd_dbi_config(apr_pool_t * pconf,
                                         apr_pool_t * plog, apr_pool_t * ptemp)
 {
     apr_status_t rv = APR_SUCCESS;
     /* create our globalish config var */
-    ftp_dbi_config_hash = apr_hash_make(pconf);
+    ftpd_dbi_config_hash = apr_hash_make(pconf);
     return rv;
 }
 
@@ -758,10 +758,10 @@ static apr_status_t kill_dbi(void *p)
     apr_status_t rv = APR_SUCCESS;
     apr_hash_index_t *idx;
     char *key;
-    ftp_dbi_config *val;
+    ftpd_dbi_config *val;
     apr_ssize_t len;
 
-    for (idx = apr_hash_first((apr_pool_t *) p, ftp_dbi_config_hash); idx;
+    for (idx = apr_hash_first((apr_pool_t *) p, ftpd_dbi_config_hash); idx;
          idx = apr_hash_next(idx)) {
         apr_hash_this(idx, (void *) &key, &len, (void *) &val);
         apr_reslist_destroy(val->pool);
@@ -771,7 +771,7 @@ static apr_status_t kill_dbi(void *p)
     return rv;
 }
 
-static apr_status_t init_ftp_dbi(apr_pool_t * p, apr_pool_t * plog,
+static apr_status_t init_ftpd_dbi(apr_pool_t * p, apr_pool_t * plog,
                                  apr_pool_t * ptemp, server_rec * s)
 {
     apr_status_t rv = APR_SUCCESS;
@@ -780,16 +780,16 @@ static apr_status_t init_ftp_dbi(apr_pool_t * p, apr_pool_t * plog,
     void *data;
     apr_hash_index_t *idx;
     char *key;
-    ftp_dbi_config *val;
+    ftpd_dbi_config *val;
     apr_ssize_t len;
-    const char *userdata_key = "mod_ftp_dbi_init";
+    const char *userdata_key = "mod_ftpd_dbi_init";
 /*    dbi_config *conf = ap_get_module_config(s->module_config,
- *                                                    &ftp_dbi_module); */
+ *                                                    &ftpd_dbi_module); */
 
     apr_pool_userdata_get(&data, userdata_key, s->process->pool);
 
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, plog,
-                              "[mod_ftp_dbi.c] init.");
+                              "[mod_ftpd_dbi.c] init.");
 
     if (!data) {
         apr_pool_userdata_set((const void *) 1, userdata_key,
@@ -797,24 +797,24 @@ static apr_status_t init_ftp_dbi(apr_pool_t * p, apr_pool_t * plog,
         return OK;
     }
     ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, p,
-                  "[mod_ftp_dbi.c] Running DBI init Code");
+                  "[mod_ftpd_dbi.c] Running DBI init Code");
 
     if ((rval = dbi_initialize(dbi_global_config.driverdir)) > 0) {
         if (dbi_global_config.driverdir == NULL) {
             ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, plog,
-                          "[mod_ftp_dbi.c] Initialization of libdbi found %d drivers in default driver directory",
+                          "[mod_ftpd_dbi.c] Initialization of libdbi found %d drivers in default driver directory",
                           rval);
         }
         else {
             ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, plog,
-                          "[mod_ftp_dbi.c] Initialization of libdbi found %d drivers in directory %s",
+                          "[mod_ftpd_dbi.c] Initialization of libdbi found %d drivers in directory %s",
                           rval, dbi_global_config.driverdir);
         }
         if (s->loglevel >= APLOG_DEBUG) {
             dbi_driver = NULL;
             while ((dbi_driver = dbi_driver_list(dbi_driver)) != NULL) {
                 ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, plog,
-                              "[mod_ftp_dbi.c] Driver '%s' was loaded.",
+                              "[mod_ftpd_dbi.c] Driver '%s' was loaded.",
                               dbi_driver_get_name(dbi_driver));
             }
         }
@@ -822,18 +822,18 @@ static apr_status_t init_ftp_dbi(apr_pool_t * p, apr_pool_t * plog,
     else {                      /* An error was returned or libdbi found 0 drivers */
         if (dbi_global_config.driverdir == NULL) {
             ap_log_perror(APLOG_MARK, APLOG_EMERG, 0, plog,
-                          "[mod_ftp_dbi.c] - Initlialization of libdbi with default driver directory failed");
+                          "[mod_ftpd_dbi.c] - Initlialization of libdbi with default driver directory failed");
         }
         else {
             ap_log_perror(APLOG_MARK, APLOG_EMERG, 0, plog,
-                          "[mod_ftp_dbi.c] - Initlialization of libdbi with FtpDbiDriverDir %s failed",
+                          "[mod_ftpd_dbi.c] - Initlialization of libdbi with FtpDbiDriverDir %s failed",
                           dbi_global_config.driverdir);
         }
         return !APR_SUCCESS;
     }
 
     /* loop the hashed config stuff... */
-    for (idx = apr_hash_first(p, ftp_dbi_config_hash); idx;
+    for (idx = apr_hash_first(p, ftpd_dbi_config_hash); idx;
          idx = apr_hash_next(idx)) {
         apr_hash_this(idx, (void *) &key, &len, (void *) &val);
         apr_reslist_create(&val->pool, val->rec.conn_min,       /* hard minimum */
@@ -843,11 +843,11 @@ static apr_status_t init_ftp_dbi(apr_pool_t * p, apr_pool_t * plog,
                            safe_dbi_new_conn,   /* Make a New Connection */
                            safe_dbi_kill_conn,  /* Kill Old Connection */
                            (void *) &val->rec, p);
-        apr_hash_set(ftp_dbi_config_hash, key, APR_HASH_KEY_STRING, val);
+        apr_hash_set(ftpd_dbi_config_hash, key, APR_HASH_KEY_STRING, val);
     }
     apr_pool_cleanup_register(p, p, kill_dbi, apr_pool_cleanup_null);
 
-    ap_add_version_component(p, "mod_ftp_dbi/" MOD_FTP_DBI_VERSION);
+    ap_add_version_component(p, "mod_ftpd_dbi/" MOD_FTPD_DBI_VERSION);
 
     return rv;
 }
@@ -856,18 +856,18 @@ static apr_status_t init_ftp_dbi(apr_pool_t * p, apr_pool_t * plog,
 
 static void register_hooks(apr_pool_t * p)
 {
-    ap_hook_pre_config(init_ftp_dbi_config, NULL, NULL, APR_HOOK_MIDDLE);
-    ap_hook_post_config(init_ftp_dbi, NULL, NULL, APR_HOOK_MIDDLE);
-	ap_register_provider(p, FTP_PROVIDER_GROUP, "dbi", "0",
-		&ftp_dbi_provider);
+    ap_hook_pre_config(init_ftpd_dbi_config, NULL, NULL, APR_HOOK_MIDDLE);
+    ap_hook_post_config(init_ftpd_dbi, NULL, NULL, APR_HOOK_MIDDLE);
+    ap_register_provider(p, FTPD_PROVIDER_GROUP, "dbi", "0",
+		&ftpd_dbi_provider);
 }
 
-module AP_MODULE_DECLARE_DATA ftp_dbi_module = {
+module AP_MODULE_DECLARE_DATA ftpd_dbi_module = {
     STANDARD20_MODULE_STUFF,
-    create_ftp_dbi_dir_config,  /* create per-directory config structure */
+    create_ftpd_dbi_dir_config,  /* create per-directory config structure */
     NULL,                       /* merge per-directory config structures */
-    create_ftp_dbi_config,      /* create per-server config structure */
+    create_ftpd_dbi_config,      /* create per-server config structure */
     NULL,                       /* merge per-server config structures */
-    ftp_dbi_cmds,               /* command apr_table_t */
+    ftpd_dbi_cmds,               /* command apr_table_t */
     register_hooks              /* register hooks */
 };

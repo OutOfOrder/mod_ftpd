@@ -56,77 +56,44 @@
 
 #include "httpd.h"
 #include "http_config.h"
-#include "apr_strings.h"
 #include "http_log.h"
 #include "ap_provider.h"
 
-#include "mod_ftp.h"
+#include "mod_ftpd.h"
 
-/* per server configuration */
-typedef struct {
-	const char *chroot_path;
-} ftp_default_server_conf;
+module AP_MODULE_DECLARE_DATA ftpd_fail_module;
 
-module AP_MODULE_DECLARE_DATA ftp_default_module;
-
-/* Apache config process */
-static void *ftp_default_create_server_config(apr_pool_t *p, server_rec *s)
+static ftpd_chroot_status_t ftpd_fail_map_chroot(const request_rec *r,
+					const char **chroot,
+					const char **initroot)
 {
-	ftp_default_server_conf *pConfig = apr_pcalloc(p, sizeof(ftp_default_server_conf));
-	return pConfig;
-}
-
-static const char * ftp_default_cmd_chrootpath(cmd_parms *cmd, void *config,
-									 const char *arg)
-{
-	ftp_default_server_conf *conf = ap_get_module_config(cmd->server->module_config,
-									&ftp_default_module);
-	conf->chroot_path = apr_pstrdup(cmd->pool, arg);
-
-	return NULL;
-}
-
-static ftp_chroot_status_t ftp_default_map_chroot(const request_rec *r,
-										const char **chroot,
-										const char **initroot)
-{
-	ftp_default_server_conf *pConfig = ap_get_module_config(r->server->module_config,
-										&ftp_default_module);
-	*chroot = apr_pstrdup(r->pool, pConfig->chroot_path);
-
-	return FTP_CHROOT_USER_FOUND;
+	return FTPD_CHROOT_FAIL;
 }
 
 /* Module initialization structures */
-static const ftp_hooks_chroot ftp_hooks_chroot_default =
+static const ftpd_hooks_chroot ftpd_hooks_chroot_fail =
 {
-	ftp_default_map_chroot		/* map_chroot */
+	ftpd_fail_map_chroot		/* map_chroot */
 };
 
-static const ftp_provider ftp_default_provider =
+static const ftpd_provider ftpd_fail_provider =
 {
-	&ftp_hooks_chroot_default,		/* chroot */
+	&ftpd_hooks_chroot_fail,		/* chroot */
 	NULL		/* listing */
-};
-
-static const command_rec ftp_default_cmds[] = {
-	AP_INIT_TAKE1("FTPChrootPath", ftp_default_cmd_chrootpath, NULL, RSRC_CONF,
-                 "Path to Database to use chroot mapping."),
-    { NULL }
 };
 
 static void register_hooks(apr_pool_t *p)
 {
-	ap_register_provider(p, FTP_PROVIDER_GROUP, "default", "0",
-		&ftp_default_provider);
+	ap_register_provider(p, FTPD_PROVIDER_GROUP, "fail", "0",
+		&ftpd_fail_provider);
 }
 
-module AP_MODULE_DECLARE_DATA ftp_default_module = {
+module AP_MODULE_DECLARE_DATA ftpd_fail_module = {
 	STANDARD20_MODULE_STUFF,
     NULL,                          /* create per-directory config structure */
     NULL,                          /* merge per-directory config structures */
-    ftp_default_create_server_config,  /* create per-server config structure */
+    NULL,  						   /* create per-server config structure */
     NULL,                          /* merge per-server config structures */
-    ftp_default_cmds,                  /* command apr_table_t */
+    NULL,                  		   /* command apr_table_t */
     register_hooks                 /* register hooks */
 };

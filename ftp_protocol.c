@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.31 2004/01/04 02:58:25 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.32 2004/01/08 04:42:48 urkle Exp $ */
 #define CORE_PRIVATE
 #include "httpd.h"
 #include "http_protocol.h"
@@ -75,32 +75,32 @@
 
 #include "ftp.h"
 
-extern int ftp_methods[FTP_M_LAST];
+extern int ftpd_methods[FTPD_M_LAST];
 
-static int ftp_data_socket_close(ftp_user_rec *ur)
+static int ftpd_data_socket_close(ftpd_user_rec *ur)
 {
 	switch (ur->data.type) {
-	case FTP_PIPE_OPEN:
+	case FTPD_PIPE_OPEN:
 		apr_socket_close(ur->data.pipe);
 		break;
-	case FTP_PIPE_PASV:
+	case FTPD_PIPE_PASV:
 		apr_socket_close(ur->data.pasv);
 		break;
 	default:
 		break;
 	}
 	apr_pool_clear(ur->data.p);
-	ur->data.type = FTP_PIPE_NONE;
-	ur->state = FTP_STATE_TRANS_NODATA;
+	ur->data.type = FTPD_PIPE_NONE;
+	ur->state = FTPD_STATE_TRANS_NODATA;
 	return OK;
 }
 
-static int ftp_data_socket_connect(ftp_user_rec *ur, ftp_svr_config_rec *pConfig)
+static int ftpd_data_socket_connect(ftpd_user_rec *ur, ftpd_svr_config_rec *pConfig)
 {
 	apr_status_t res=-1;
 
 	switch (ur->data.type) {
-	case FTP_PIPE_PASV:
+	case FTPD_PIPE_PASV:
 		res = apr_socket_accept(&ur->data.pipe, ur->data.pasv, ur->data.p);
 		apr_socket_close(ur->data.pasv);
 		if (!pConfig->bAllowFXP) {
@@ -116,15 +116,15 @@ static int ftp_data_socket_connect(ftp_user_rec *ur, ftp_svr_config_rec *pConfig
 				return APR_ECONNREFUSED;
 			}
 		}
-		ur->data.type = FTP_PIPE_OPEN;
-		ur->state = FTP_STATE_TRANS_NODATA;
+		ur->data.type = FTPD_PIPE_OPEN;
+		ur->state = FTPD_STATE_TRANS_NODATA;
 		break;
-	case FTP_PIPE_PORT:
+	case FTPD_PIPE_PORT:
 		apr_socket_create(&ur->data.pipe, ur->data.port->family,
 			SOCK_STREAM, APR_PROTO_TCP, ur->data.p);
 		res = apr_socket_connect(ur->data.pipe, ur->data.port);
-		ur->data.type = FTP_PIPE_OPEN;
-		ur->state = FTP_STATE_TRANS_NODATA;
+		ur->data.type = FTPD_PIPE_OPEN;
+		ur->state = FTPD_STATE_TRANS_NODATA;
 		break;
 	default:
 		break;
@@ -133,7 +133,7 @@ static int ftp_data_socket_connect(ftp_user_rec *ur, ftp_svr_config_rec *pConfig
 }
 
 /* Creates a sub request record for handlers */
-static request_rec *ftp_create_subrequest(request_rec *r, ftp_user_rec *ur)
+static request_rec *ftpd_create_subrequest(request_rec *r, ftpd_user_rec *ur)
 {
 	apr_pool_t *rrp;
 	request_rec *rnew;
@@ -169,13 +169,13 @@ static request_rec *ftp_create_subrequest(request_rec *r, ftp_user_rec *ur)
 	rnew->output_filters = r->connection->output_filters;
 	rnew->input_filters = r->connection->input_filters;
 	
-	ap_set_module_config(rnew->request_config, &ftp_module, ur);
+	ap_set_module_config(rnew->request_config, &ftpd_module, ur);
 	return rnew;
 }
 
-#define ftp_check_acl(a,b) ftp_check_acl_ex(a,b,0)
+#define ftpd_check_acl(a,b) ftpd_check_acl_ex(a,b,0)
 
-static int ftp_check_acl_ex(const char *newpath, request_rec *r, int skipauth) 
+static int ftpd_check_acl_ex(const char *newpath, request_rec *r, int skipauth) 
 {
 	apr_status_t res;
 	if (newpath) {
@@ -216,14 +216,14 @@ static int ftp_check_acl_ex(const char *newpath, request_rec *r, int skipauth)
 
 
 typedef enum {ASCII_TO_LF, ASCII_TO_CRLF} ascii_direction;
-static char *ftp_ascii_convert(char *buf, apr_size_t *len, ascii_direction way, apr_pool_t *p)
+static char *ftpd_ascii_convert(char *buf, apr_size_t *len, ascii_direction way, apr_pool_t *p)
 {
 	char *itr = buf;
 	char *buf2;
-	char temp[FTP_IO_BUFFER_MAX*2];
+	char temp[FTPD_IO_BUFFER_MAX*2];
 	apr_size_t len_itr = 0;
 
-	memset(temp, 0, FTP_IO_BUFFER_MAX * 2);
+	memset(temp, 0, FTPD_IO_BUFFER_MAX * 2);
 	while ((itr - buf) < *len) {
 		switch (way) {
 		case ASCII_TO_CRLF:
@@ -246,19 +246,19 @@ static char *ftp_ascii_convert(char *buf, apr_size_t *len, ascii_direction way, 
 	return buf2;
 }
 
-int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
+int process_ftpd_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 {
-	char cmdbuff[FTP_STRING_LENGTH];
+	char cmdbuff[FTPD_STRING_LENGTH];
     char *buffer;	/* a pointer to cmdbuff */
 	char *command;
     int invalid_cmd = 0;
     apr_size_t len;
-    ftp_handler_st *handle_func;
+    ftpd_handler_st *handle_func;
 	apr_status_t res;
 	request_rec *handler_r;
 	apr_pool_t *p;
 	apr_time_t request_time;
-    ftp_user_rec *ur = ftp_get_user_rec(r);
+    ftpd_user_rec *ur = ftpd_get_user_rec(r);
 
 	apr_pool_create(&p, r->pool);
 
@@ -268,7 +268,7 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 		buffer = cmdbuff;   /* reset buffer pointer */
 		apr_pool_clear(p);
         if ((invalid_cmd > MAX_INVALID_CMD) ||
-            ap_rgetline(&buffer, FTP_STRING_LENGTH, &len, r, 0, bb) != APR_SUCCESS)
+            ap_rgetline(&buffer, FTPD_STRING_LENGTH, &len, r, 0, bb) != APR_SUCCESS)
         {
             break;
         }
@@ -278,7 +278,7 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 		/* This command moves the pointer of buffer to the end of the extracted string */
         command = ap_getword_white_nc(p, &buffer);
         ap_str_tolower(command);
-        handle_func = apr_hash_get(ap_ftp_hash, command, APR_HASH_KEY_STRING);
+        handle_func = apr_hash_get(ftpd_hash, command, APR_HASH_KEY_STRING);
 
         if (!handle_func) {
             ap_rprintf(r, FTP_C_BADCMD" '%s': command not understood.\r\n", command);
@@ -289,17 +289,17 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 			"handler state: %X, epsv mode: %d", handle_func->states, ur->epsv_lock);
         if (!(handle_func->states & ur->state)
-				|| ((handle_func->states & FTP_FLAG_EPSV_LOCK) && ur->epsv_lock) ) {
-			if ((ur->state == FTP_STATE_AUTH)||(ur->state == FTP_STATE_USER_ACK)) {
-				ur->state = FTP_STATE_AUTH;
+				|| ((handle_func->states & FTPD_FLAG_EPSV_LOCK) && ur->epsv_lock) ) {
+			if ((ur->state == FTPD_STATE_AUTH)||(ur->state == FTPD_STATE_USER_ACK)) {
+				ur->state = FTPD_STATE_AUTH;
 				ap_rprintf(r, FTP_C_LOGINERR" '%s' Please login with USER and PASS.\r\n", command);
-			} else if ((handle_func->states & FTP_FLAG_EPSV_LOCK) &&  ur->epsv_lock) {
+			} else if ((handle_func->states & FTPD_FLAG_EPSV_LOCK) &&  ur->epsv_lock) {
 				ap_rprintf(r, FTP_C_BADSENDCONN" EPSV ALL mode in effect command %s disabled.\r\n", command);
-			} else if (handle_func->states & FTP_STATE_RENAME) {
+			} else if (handle_func->states & FTPD_STATE_RENAME) {
 				ap_rprintf(r, FTP_C_NEEDRNFR" '%s' RNTO requires RNFR first.\r\n", command);
-			} else if (handle_func->states & FTP_STATE_TRANS_DATA) {
+			} else if (handle_func->states & FTPD_STATE_TRANS_DATA) {
 				ap_rprintf(r, FTP_C_BADSENDCONN" '%s' Please Specify PASV, PORT, EPRT, EPSV first.\r\n", command);
-			} else if (handle_func->states & FTP_FLAG_NOT_IMPLEMENTED) {
+			} else if (handle_func->states & FTPD_FLAG_NOT_IMPLEMENTED) {
 				ap_rprintf(r, FTP_C_CMDNOTIMPL" '%s' Command not implemented on this server.\r\n", command);
 			} else {
             	ap_rprintf(r, "500 '%s': command not allowed in this state\r\n", command);
@@ -308,11 +308,11 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
             //invalid_cmd++;
             continue;
         }
-		handler_r = ftp_create_subrequest(r,ur);
+		handler_r = ftpd_create_subrequest(r,ur);
 		handler_r->request_time = request_time;
-		ap_ftp_str_toupper(command);
+		ap_ftpd_str_toupper(command);
 	
-		if (handle_func->states & FTP_FLAG_HIDE_ARGS) {
+		if (handle_func->states & FTPD_FLAG_HIDE_ARGS) {
 			handler_r->the_request = apr_pstrdup(handler_r->pool, command);
 		} else {
 			handler_r->the_request = apr_psprintf(handler_r->pool, "%s %s", command, buffer);
@@ -322,16 +322,16 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 
        	res = handle_func->func(handler_r, buffer, handle_func->data);
 
-		if (res == FTP_HANDLER_PERMDENY) {
+		if (res == FTPD_HANDLER_PERMDENY) {
 				handler_r->status = HTTP_FORBIDDEN;
-		} else if ((res == FTP_HANDLER_USER_NOT_ALLOWED) || (res == FTP_HANDLER_USER_UNKNOWN)) {
+		} else if ((res == FTPD_HANDLER_USER_NOT_ALLOWED) || (res == FTPD_HANDLER_USER_UNKNOWN)) {
 				handler_r->status = HTTP_UNAUTHORIZED;
-		} else if (res == FTP_HANDLER_SERVERERROR) {
+		} else if (res == FTPD_HANDLER_SERVERERROR) {
 				handler_r->status = HTTP_INTERNAL_SERVER_ERROR;
-		} else if (res == FTP_HANDLER_FILENOTFOUND) {
+		} else if (res == FTPD_HANDLER_FILENOTFOUND) {
 				handler_r->status = HTTP_NOT_FOUND; /* 404'ed */
 		}
-		if (handle_func->states & FTP_FLAG_LOG_COMMAND) {
+		if (handle_func->states & FTPD_FLAG_LOG_COMMAND) {
 			/* Make sure URI is URI escaped */
 			if (handler_r->uri) {
 				handler_r->uri = ap_escape_uri(handler_r->pool, handler_r->uri);
@@ -345,64 +345,64 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 		ap_increment_counts(r->connection->sbh, handler_r);
 		ap_update_child_status(r->connection->sbh, SERVER_BUSY_KEEPALIVE, r);
 
-		if (res == FTP_HANDLER_UPDATE_AUTH) {
+		if (res == FTPD_HANDLER_UPDATE_AUTH) {
 			/* Assign to master request_rec for all subreqs */
 			r->user = apr_pstrdup(r->pool, ur->user);
 		    apr_table_set(r->headers_in, "Authorization", ur->auth_string);
 			r->ap_auth_type = apr_pstrdup(r->pool, handler_r->ap_auth_type);
-		} else if (res == FTP_HANDLER_UPDATE_AGENT) {
+		} else if (res == FTPD_HANDLER_UPDATE_AGENT) {
 			apr_table_set(r->headers_in, "User-Agent", ur->useragent);
-		} else if (res == FTP_HANDLER_QUIT) {
+		} else if (res == FTPD_HANDLER_QUIT) {
             break;
         }
 		apr_pool_destroy(handler_r->pool);
     }
-    return FTP_HANDLER_OK;
+    return FTPD_HANDLER_OK;
 }
 
 HANDLER_DECLARE(quit)
 {
-    ftp_user_rec *ur = ftp_get_user_rec(r);
+    ftpd_user_rec *ur = ftpd_get_user_rec(r);
 
-    if (ur->state & FTP_STATE_TRANSACTION) {
+    if (ur->state & FTPD_STATE_TRANSACTION) {
         ap_rprintf(r, FTP_C_GOODBYE"-FTP Statistics go here.\r\n");
     }
 	ap_rprintf(r, FTP_C_GOODBYE" Goodbye.\r\n");
 
     ap_rflush(r);
-    ur->state = FTP_STATE_AUTH;
-    return FTP_HANDLER_QUIT;
+    ur->state = FTPD_STATE_AUTH;
+    return FTPD_HANDLER_QUIT;
 }
 
 HANDLER_DECLARE(user)
 {
 	char *user;
-    ftp_user_rec *ur = ftp_get_user_rec(r);
+    ftpd_user_rec *ur = ftpd_get_user_rec(r);
 
     user = ap_getword_white_nc(r->pool, &buffer);
     if (!strcmp(user, "")) {
         ap_rprintf(r, FTP_C_LOGINERR" Please login with USER and PASS.\r\n");
         ap_rflush(r);
-        return FTP_HANDLER_USER_NOT_ALLOWED;
+        return FTPD_HANDLER_USER_NOT_ALLOWED;
     }
     ur->user = apr_pstrdup(ur->p, user);
 
     ap_rprintf(r, FTP_C_GIVEPWORD" Password required for %s.\r\n", ur->user);
     ap_rflush(r);    
-	ur->state = FTP_STATE_USER_ACK;
-	return FTP_HANDLER_OK;
+	ur->state = FTPD_STATE_USER_ACK;
+	return FTPD_HANDLER_OK;
 }
 
 HANDLER_DECLARE(passwd)
 {
 	char *passwd;
-	ftp_provider_list *current_provider;
+	ftpd_provider_list *current_provider;
 	apr_status_t res;
 	const char *chroot = NULL,*initroot = NULL;
-	ftp_chroot_status_t chroot_ret;
-	ftp_user_rec *ur = ftp_get_user_rec(r);
-	ftp_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
-					&ftp_module);
+	ftpd_chroot_status_t chroot_ret;
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	ftpd_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+					&ftpd_module);
 
     passwd = apr_psprintf(r->pool, "%s:%s", ur->user,
                           ap_getword_white_nc(r->pool, &buffer));
@@ -414,7 +414,7 @@ HANDLER_DECLARE(passwd)
 	/* Get chroot mapping */
 	current_provider = pConfig->providers;
 	while (current_provider) {
-		const ftp_provider *provider;
+		const ftpd_provider *provider;
 		provider = current_provider->provider;
 
 		if (! provider->chroot) {
@@ -425,18 +425,18 @@ HANDLER_DECLARE(passwd)
 			ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 				"Check provider %s", current_provider->name);
 			chroot_ret = provider->chroot->map_chroot(r, &chroot, &initroot);
-			if (chroot_ret == FTP_CHROOT_USER_FOUND) {
+			if (chroot_ret == FTPD_CHROOT_USER_FOUND) {
 				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 					"Chroot set to %s", chroot);
 				break; /* We got one fall out */
-			} else if (chroot_ret == FTP_CHROOT_FAIL) {
+			} else if (chroot_ret == FTPD_CHROOT_FAIL) {
 				ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
 					"User denied access to server");
 				ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed\r\n");
 				ap_rflush(r);
 				/* Bail out immediatly if this occurs */
-				return FTP_HANDLER_QUIT;
-			} else { /* FTP_CHROOT_USER_NOT_FOUND*/
+				return FTPD_HANDLER_QUIT;
+			} else { /* FTPD_CHROOT_USER_NOT_FOUND*/
 				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 					"User not found in chroot provider. Continuing");
 			}
@@ -463,13 +463,13 @@ HANDLER_DECLARE(passwd)
  * Probably not a good way to prevent logins but it works 
  */
 	r->method = apr_pstrdup(r->pool, "CHDIR");
-	r->method_number = ftp_methods[FTP_M_CHDIR];
+	r->method_number = ftpd_methods[FTPD_M_CHDIR];
 
-	if ((res = ftp_check_acl_ex(ur->current_directory, r, 1))!=OK) {
+	if ((res = ftpd_check_acl_ex(ur->current_directory, r, 1))!=OK) {
 		ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed\r\n");
 		ap_rflush(r);
 		/* Bail out immediatly if this occurs? */
-		return FTP_HANDLER_QUIT;
+		return FTPD_HANDLER_QUIT;
 	}
 	
     if ((res = ap_run_check_user_id(r)) != OK) {
@@ -477,32 +477,32 @@ HANDLER_DECLARE(passwd)
         ap_rflush(r);
         ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
                "Unauthorized user '%s' tried to log in:", ur->user);
-        ur->state = FTP_STATE_AUTH;
-        return FTP_HANDLER_USER_NOT_ALLOWED;
+        ur->state = FTPD_STATE_AUTH;
+        return FTPD_HANDLER_USER_NOT_ALLOWED;
     }
 	if ((res = ap_run_auth_checker(r)) != OK) {
 		ap_rprintf(r, FTP_C_LOGINERR" Login denied\r\n");
 		ap_rflush(r);
         ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
                "Unauthorized user '%s' tried to log in:", ur->user);
-		return FTP_HANDLER_USER_UNKNOWN;
+		return FTPD_HANDLER_USER_UNKNOWN;
 	}
 
 	/* Report succsessful login */
     ap_rprintf(r, FTP_C_LOGINOK" User %s logged in.\r\n", ur->user);
     ap_rflush(r);
-	ur->state = FTP_STATE_TRANS_NODATA;
-	return FTP_HANDLER_UPDATE_AUTH;
+	ur->state = FTPD_STATE_TRANS_NODATA;
+	return FTPD_HANDLER_UPDATE_AUTH;
 }
 
 HANDLER_DECLARE(pwd)
 {
-    ftp_user_rec *ur = ftp_get_user_rec(r);
+    ftpd_user_rec *ur = ftpd_get_user_rec(r);
 
 	ap_rprintf(r, FTP_C_PWDOK" \"%s\" is current directory.\r\n",ur->current_directory);
 
     ap_rflush(r);
-    return FTP_HANDLER_OK;
+    return FTPD_HANDLER_OK;
 }
 
 
@@ -510,7 +510,7 @@ HANDLER_DECLARE(cd)
 {
 	char *patharg;  /* incoming directory change */
 	//char *newpath;	/* temp space for merged local path */
-    ftp_user_rec *ur = ftp_get_user_rec(r);
+    ftpd_user_rec *ur = ftpd_get_user_rec(r);
 
 	if ((int)data==1) {
 		patharg = "..";
@@ -521,26 +521,26 @@ HANDLER_DECLARE(cd)
 			APR_FILEPATH_TRUENAME, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid path.\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	r->method = apr_pstrdup(r->pool, "CHDIR");
-	r->method_number = ftp_methods[FTP_M_CHDIR];
+	r->method_number = ftpd_methods[FTPD_M_CHDIR];
 
-	if (ftp_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_PERMDENY;
+		return FTPD_HANDLER_PERMDENY;
 	}
 
 	if (!ap_is_directory(r->pool, r->filename)) {
 		ap_rprintf(r, FTP_C_FILEFAIL" '%s': No such file or directory.\r\n",patharg);
     	ap_rflush(r);
-	    return FTP_HANDLER_FILENOTFOUND;
+	    return FTPD_HANDLER_FILENOTFOUND;
 	} else {
 		ur->current_directory = apr_pstrdup(ur->p,r->uri);
 		ap_rprintf(r, FTP_C_CWDOK" CWD command successful.\r\n");
     	ap_rflush(r);
-	    return FTP_HANDLER_OK;
+	    return FTPD_HANDLER_OK;
 	}
 }
 
@@ -549,8 +549,8 @@ HANDLER_DECLARE(help)
 	char *command;
 	int column;
 	apr_hash_index_t* hash_itr;
-	ftp_handler_st *handle_func;
-	int rv = FTP_HANDLER_OK;
+	ftpd_handler_st *handle_func;
+	int rv = FTPD_HANDLER_OK;
 
 	command = ap_getword_white_nc(r->pool, &buffer);
 	if (command[0]=='\0') {
@@ -560,21 +560,21 @@ HANDLER_DECLARE(help)
 			ap_rprintf(r, FTP_C_FEATOK"-FEAT\r\n");
 		}
 		column = 0;
-		for (hash_itr = apr_hash_first(r->pool, ap_ftp_hash); hash_itr;
+		for (hash_itr = apr_hash_first(r->pool, ftpd_hash); hash_itr;
 				hash_itr = apr_hash_next(hash_itr)) {
 			apr_hash_this(hash_itr, (const void **)&command, NULL,(void **)&handle_func);
 			command = apr_pstrdup(r->pool,command);
-			ap_ftp_str_toupper(command);
+			ap_ftpd_str_toupper(command);
 			if (!(int)data) { /* HELP */
 				column++;
 				ap_rprintf(r,"   %c%-4s",
-					(handle_func->states & FTP_FLAG_NOT_IMPLEMENTED)?'*':' ',
+					(handle_func->states & FTPD_FLAG_NOT_IMPLEMENTED)?'*':' ',
 					command);
 				if ((column % 7)==0) {
 					ap_rputs("\r\n",r);
 				}
 			} else { /* FEAT */
-				if (handle_func->states & FTP_FLAG_FEATURE) {
+				if (handle_func->states & FTPD_FLAG_FEATURE) {
 					ap_rprintf(r,"    %-4s\r\n",command);
 				}
 			}
@@ -591,14 +591,14 @@ HANDLER_DECLARE(help)
 		}
 	} else {
 		ap_str_tolower(command);
-		handle_func = apr_hash_get(ap_ftp_hash, command, APR_HASH_KEY_STRING);
+		handle_func = apr_hash_get(ftpd_hash, command, APR_HASH_KEY_STRING);
 		/* Str to Upper */
-		ap_ftp_str_toupper(command);
+		ap_ftpd_str_toupper(command);
 		if (!handle_func) {
 			ap_rprintf(r, FTP_C_BADHELP" Unknown command %s\r\n",command);
-			rv = FTP_HANDLER_SERVERERROR;
+			rv = FTPD_HANDLER_SERVERERROR;
 		} else {
-			if (handle_func->states & FTP_FLAG_NOT_IMPLEMENTED) {
+			if (handle_func->states & FTPD_FLAG_NOT_IMPLEMENTED) {
 				if (handle_func->help_text) {
 					ap_rprintf(r, FTP_C_HELPOK"-Syntax: %s %s\r\n",command,handle_func->help_text);
 				}
@@ -620,12 +620,12 @@ HANDLER_DECLARE(syst)
 {
 	ap_rputs(FTP_C_SYSTOK" UNIX Type: L8\r\n",r);
 	ap_rflush(r);
-	return FTP_HANDLER_OK;
+	return FTPD_HANDLER_OK;
 }
 
 HANDLER_DECLARE(NOOP)
 {
-	int rv = FTP_HANDLER_OK;
+	int rv = FTPD_HANDLER_OK;
 	if (!data) {
 		ap_rputs(FTP_C_NOOPOK" Command completed successfully.\r\n",r);
 	} else {
@@ -635,7 +635,7 @@ HANDLER_DECLARE(NOOP)
 			ap_rputs(FTP_C_NOOPOK" Command completed successfully.\r\n",r);
 		} else {
 			ap_rputs(FTP_C_INVALIDARG" Invalid argument.\r\n",r);
-			rv = FTP_HANDLER_SERVERERROR;
+			rv = FTPD_HANDLER_SERVERERROR;
 		}
 	}
 	ap_rflush(r);
@@ -643,12 +643,12 @@ HANDLER_DECLARE(NOOP)
 }
 HANDLER_DECLARE(clnt)
 {
-	ftp_user_rec *ur = ftp_get_user_rec(r);
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
 
 	ur->useragent = apr_pstrdup(ur->p, buffer);
 	ap_rputs(FTP_C_CLNTOK" Command completed successfully.\r\n",r);
 	ap_rflush(r);
-	return FTP_HANDLER_UPDATE_AGENT;
+	return FTPD_HANDLER_UPDATE_AGENT;
 }
 
 HANDLER_DECLARE(pasv)
@@ -658,13 +658,13 @@ HANDLER_DECLARE(pasv)
 	char *ipaddr;
 	int family;
 	apr_status_t res;
-	ftp_user_rec *ur = ftp_get_user_rec(r);
-	ftp_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
-					&ftp_module);
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	ftpd_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+					&ftpd_module);
 	int bind_retries = 10;
 
 /* Close old socket if already connected */
-	ftp_data_socket_close(ur);
+	ftpd_data_socket_close(ur);
 
 	apr_sockaddr_ip_get(&ipaddr, local_addr);
 
@@ -680,11 +680,11 @@ HANDLER_DECLARE(pasv)
 			ap_rprintf(r, FTP_C_INVALID_PROTO" not same protocol as connection, use (%d)\r\n",
 					local_addr->family);
 			ap_rflush(r);
-			return FTP_HANDLER_SERVERERROR;
+			return FTPD_HANDLER_SERVERERROR;
 		} else if (family!=0) {
 			ap_rprintf(r, FTP_C_INVALID_PROTO" Unsupported Protocol, use (1,2)\r\n");
 			ap_rflush(r);
-			return FTP_HANDLER_SERVERERROR;
+			return FTPD_HANDLER_SERVERERROR;
 		}
 	}
 	family = local_addr->family;
@@ -710,7 +710,7 @@ HANDLER_DECLARE(pasv)
 	if (!bind_retries) {
 		ap_rprintf(r, FTP_C_PASVFAIL" Error Binding to address\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	
 /* open the socket in listen mode and allow 1 queued connection */
@@ -737,9 +737,9 @@ HANDLER_DECLARE(pasv)
 			port);
 	}
 	ap_rflush(r);
-	ur->data.type = FTP_PIPE_PASV;
-	ur->state = FTP_STATE_TRANS_DATA;
-	return FTP_HANDLER_OK;
+	ur->data.type = FTPD_PIPE_PASV;
+	ur->state = FTPD_STATE_TRANS_DATA;
+	return FTPD_HANDLER_OK;
 }
 
 HANDLER_DECLARE(port)
@@ -749,17 +749,17 @@ HANDLER_DECLARE(port)
 	char tok_sep[2], *tok_sess;
 	int family;
 	apr_port_t port;
-	ftp_user_rec *ur = ftp_get_user_rec(r);
-	ftp_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
-					&ftp_module);
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	ftpd_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+					&ftpd_module);
 
 	if (!pConfig->bAllowPort) {
 		ap_rprintf(r, FTP_C_CMDDISABLED" PORT command not allowed on this server\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 /* Close old socket if already connected */
-	ftp_data_socket_close(ur);
+	ftpd_data_socket_close(ur);
 
 	if (!data) { /* regular port cmmand */
 		sscanf(buffer, "%d,%d,%d,%d,%d,%d",
@@ -774,17 +774,17 @@ HANDLER_DECLARE(port)
 		if ((strfamily = apr_strtok(buffer, tok_sep, &tok_sess))==NULL) {
 			ap_rprintf(r, FTP_C_INVALIDARG" Invalid Argument\r\n");
 			ap_rflush(r);
-			return FTP_HANDLER_SERVERERROR;
+			return FTPD_HANDLER_SERVERERROR;
 		}
 		if ((ipaddr = apr_strtok(NULL, tok_sep, &tok_sess))==NULL) {
 			ap_rprintf(r, FTP_C_INVALIDARG" Invalid Argument\r\n");
 			ap_rflush(r);
-			return FTP_HANDLER_SERVERERROR;
+			return FTPD_HANDLER_SERVERERROR;
 		}
 		if ((strport = apr_strtok(NULL, tok_sep, &tok_sess))==NULL) {
 			ap_rprintf(r, FTP_C_INVALIDARG" Invalid Argument\r\n");
 			ap_rflush(r);
-			return FTP_HANDLER_SERVERERROR;
+			return FTPD_HANDLER_SERVERERROR;
 		}
 		port = apr_atoi64(strport);
 		family = apr_atoi64(strfamily);
@@ -795,7 +795,7 @@ HANDLER_DECLARE(port)
 		} else {
 			ap_rprintf(r, FTP_C_INVALID_PROTO" Unsupported Protocol, use (1,2)\r\n");
 			ap_rflush(r);
-			return FTP_HANDLER_SERVERERROR;
+			return FTPD_HANDLER_SERVERERROR;
 		}
 	}
 	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
@@ -810,14 +810,14 @@ HANDLER_DECLARE(port)
 				"Data connection from foreign host: %s", ip_data);
 			ap_rprintf(r, FTP_C_CMDDISABLED" Port to foreign host not allowed %s\r\n",ip_data);
 			ap_rflush(r);
-			return FTP_HANDLER_SERVERERROR;
+			return FTPD_HANDLER_SERVERERROR;
 		}
 	}
 	ap_rprintf(r, FTP_C_PORTOK" Command Successful\r\n");
 	ap_rflush(r);
-	ur->data.type = FTP_PIPE_PORT;
-	ur->state = FTP_STATE_TRANS_DATA;
-	return FTP_HANDLER_OK;
+	ur->data.type = FTPD_PIPE_PORT;
+	ur->state = FTPD_STATE_TRANS_DATA;
+	return FTPD_HANDLER_OK;
 }
 
 HANDLER_DECLARE(list)
@@ -832,9 +832,9 @@ HANDLER_DECLARE(list)
  	char *user, *group;
 	char strtime[16], strperms[11];
 
-    ftp_user_rec *ur = ftp_get_user_rec(r);
-	ftp_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
-					&ftp_module);
+    ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	ftpd_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+					&ftpd_module);
 
 
 	/* Skip past all list arguments */
@@ -851,36 +851,36 @@ HANDLER_DECLARE(list)
 
 	/* Set Method */
 	r->method = apr_pstrdup(r->pool,"LIST");
-	r->method_number = ftp_methods[FTP_M_LIST];
+	r->method_number = ftpd_methods[FTPD_M_LIST];
 	r->the_request = apr_psprintf(r->pool, "LIST %s", r->uri);
 	ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, r);
 
 	ap_rputs(FTP_C_DATACONN" Opening ASCII mode data connection for file list.\r\n", r);
-	if ((res = ftp_data_socket_connect(ur,pConfig)) != APR_SUCCESS) {
+	if ((res = ftpd_data_socket_connect(ur,pConfig)) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_BADSENDCONN" Error accepting connection\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 
-	if (ftp_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
-		ftp_data_socket_close(ur);
-		return FTP_HANDLER_PERMDENY;
+		ftpd_data_socket_close(ur);
+		return FTPD_HANDLER_PERMDENY;
 	}
 	/* TODO: support listing of a file with LIST */
 	if (!ap_is_directory(r->pool, r->filename)) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Not a directory\r\n");
 		ap_rflush(r);
-		ftp_data_socket_close(ur);
-		return FTP_HANDLER_SERVERERROR;
+		ftpd_data_socket_close(ur);
+		return FTPD_HANDLER_SERVERERROR;
 	}
 
 	if (apr_dir_open(&dir, r->filename, r->pool)!=APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Error opening directory\r\n");
 		ap_rflush(r);
-		ftp_data_socket_close(ur);
-		return FTP_HANDLER_SERVERERROR;
+		ftpd_data_socket_close(ur);
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	if ((int)data==1) {  /* NLST */
 		flags = APR_FINFO_NAME | APR_FINFO_TYPE;
@@ -972,15 +972,15 @@ HANDLER_DECLARE(list)
 	apr_dir_close(dir);
 	ap_rputs(FTP_C_TRANSFEROK" Transfer complete.\r\n",r);
 	ap_rflush(r);
-	ftp_data_socket_close(ur);
-	return FTP_HANDLER_OK;
+	ftpd_data_socket_close(ur);
+	return FTPD_HANDLER_OK;
 }
 
 HANDLER_DECLARE(type)
 {
 	char *arg;
-    ftp_user_rec *ur = ftp_get_user_rec(r);
-	int rv = FTP_HANDLER_OK;
+    ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	int rv = FTPD_HANDLER_OK;
 
 	arg = apr_pstrdup(r->pool, buffer);
 	ap_str_tolower(arg);
@@ -995,7 +995,7 @@ HANDLER_DECLARE(type)
 		ur->binaryflag = 0;
 	} else {
 		ap_rprintf(r, FTP_C_INVALIDARG" Invalid Argument.\r\n");
-		rv = FTP_HANDLER_SERVERERROR;
+		rv = FTPD_HANDLER_SERVERERROR;
 	}
 	ap_rflush(r);
 	return rv;
@@ -1004,16 +1004,16 @@ HANDLER_DECLARE(type)
 HANDLER_DECLARE(retr)
 {
 	apr_size_t buffsize;
-	char buff[FTP_IO_BUFFER_MAX];
+	char buff[FTPD_IO_BUFFER_MAX];
 	char *sendbuff;
 	int iodone;
 	apr_file_t *fp;
 	apr_finfo_t finfo;
 	apr_status_t res;
 
-	ftp_user_rec *ur = ftp_get_user_rec(r);
-	ftp_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
-					&ftp_module);
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	ftpd_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+					&ftpd_module);
 
 	apr_filepath_merge(&r->uri, ur->current_directory, buffer,
 			APR_FILEPATH_TRUENAME, r->pool);
@@ -1023,35 +1023,35 @@ HANDLER_DECLARE(retr)
 	r->the_request = apr_psprintf(r->pool, "RETR %s", r->uri);
 	ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, r);
 
-	if (ftp_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
-		ftp_data_socket_close(ur);
-		return FTP_HANDLER_PERMDENY;
+		ftpd_data_socket_close(ur);
+		return FTPD_HANDLER_PERMDENY;
 	}
 
 	if (apr_file_open(&fp, r->filename, APR_READ,
 			APR_OS_DEFAULT, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" %s: file does not exist\r\n", buffer);
 		ap_rflush(r);
-		ftp_data_socket_close(ur);
-		return FTP_HANDLER_FILENOTFOUND;
+		ftpd_data_socket_close(ur);
+		return FTPD_HANDLER_FILENOTFOUND;
 	}
 	apr_file_info_get(&finfo, APR_FINFO_TYPE | APR_FINFO_SIZE, fp);
 	if (finfo.filetype == APR_DIR) {
 		ap_rprintf(r, FTP_C_FILEFAIL" %s: not a plain file\r\n", buffer);
 		ap_rflush(r);
 		apr_file_close(fp);
-		ftp_data_socket_close(ur);
-		return FTP_HANDLER_SERVERERROR;
+		ftpd_data_socket_close(ur);
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	ap_rprintf(r, FTP_C_DATACONN" Opening data connection\r\n");
 	ap_rflush(r);
-	if (ftp_data_socket_connect(ur,pConfig) != APR_SUCCESS) {
+	if (ftpd_data_socket_connect(ur,pConfig) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_BADSENDCONN" Error accepting connection\r\n");
 		ap_rflush(r);
 		apr_file_close(fp);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 /* Check Restart */
 	if (ur->restart_position) {
@@ -1062,8 +1062,8 @@ HANDLER_DECLARE(retr)
 			ap_rprintf(r, FTP_C_FILEFAIL" Unable to set file postition\r\n");
 			ap_rflush(r);
 			apr_file_close(fp);
-			ftp_data_socket_close(ur);
-			return FTP_HANDLER_SERVERERROR;
+			ftpd_data_socket_close(ur);
+			return FTPD_HANDLER_SERVERERROR;
 		}
 		ur->restart_position = 0;
 	}
@@ -1072,12 +1072,12 @@ HANDLER_DECLARE(retr)
 	r->sent_bodyct = 1;
 	r->bytes_sent = 0;
 	while (!iodone) {
-		buffsize = FTP_IO_BUFFER_MAX;
+		buffsize = FTPD_IO_BUFFER_MAX;
 		res = apr_file_read(fp, buff, &buffsize);
 				/* did we receive anything? */
 		if (res == APR_SUCCESS) {
 			if (!ur->binaryflag) {
-				sendbuff = ftp_ascii_convert(buff, &buffsize, ASCII_TO_CRLF, r->pool);
+				sendbuff = ftpd_ascii_convert(buff, &buffsize, ASCII_TO_CRLF, r->pool);
 			} else {
 				sendbuff = buff;
 			}
@@ -1098,81 +1098,81 @@ HANDLER_DECLARE(retr)
 /* Close verything up */
 	ap_rprintf(r, FTP_C_TRANSFEROK" Transfer complete\r\n");
 	ap_rflush(r);
-	ftp_data_socket_close(ur);
+	ftpd_data_socket_close(ur);
 	apr_file_close(fp);
-	return FTP_HANDLER_OK;
+	return FTPD_HANDLER_OK;
 }
 
 HANDLER_DECLARE(size)
 {
 	apr_finfo_t finfo;
-    ftp_user_rec *ur = ftp_get_user_rec(r);
+    ftpd_user_rec *ur = ftpd_get_user_rec(r);
 
 	if (apr_filepath_merge(&r->uri, ur->current_directory, buffer,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	/* Set Method */
 	r->method = apr_pstrdup(r->pool,"LIST");
-	r->method_number = ftp_methods[FTP_M_LIST];
+	r->method_number = ftpd_methods[FTPD_M_LIST];
 
-	if (ftp_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_PERMDENY;
+		return FTPD_HANDLER_PERMDENY;
 	}
 	if (!ur->binaryflag) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Could not get file size.\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	if (apr_stat(&finfo, r->filename, APR_FINFO_SIZE | APR_FINFO_TYPE, r->pool)!=APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Error stating file\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_FILENOTFOUND;
+		return FTPD_HANDLER_FILENOTFOUND;
 	}
 	if (finfo.filetype == APR_DIR) {
 		ap_rprintf(r, FTP_C_FILEFAIL" %s: not a plain file\r\n", buffer);
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	} else {
 		ap_rprintf(r, FTP_C_SIZEOK" %"APR_OFF_T_FMT"\r\n",finfo.size);
 		ap_rflush(r);
-		return FTP_HANDLER_OK;
+		return FTPD_HANDLER_OK;
 	}
 }
 HANDLER_DECLARE(mdtm)
 {
 	apr_finfo_t finfo;
-    ftp_user_rec *ur = ftp_get_user_rec(r);
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
 
 	if (apr_filepath_merge(&r->uri,ur->current_directory,buffer,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	/* Set Method */
 	r->method = apr_pstrdup(r->pool,"LIST");
-	r->method_number = ftp_methods[FTP_M_LIST];
+	r->method_number = ftpd_methods[FTPD_M_LIST];
 
-	if (ftp_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_PERMDENY;
+		return FTPD_HANDLER_PERMDENY;
 	}
 
 	if (apr_stat(&finfo, r->filename, APR_FINFO_MTIME | APR_FINFO_TYPE, r->pool)!=APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Error stating file\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_FILENOTFOUND;
+		return FTPD_HANDLER_FILENOTFOUND;
 	}
 	if (finfo.filetype == APR_DIR) {
 		ap_rprintf(r, FTP_C_FILEFAIL" %s: not a plain file\r\n", buffer);
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	} else {
 		char strtime[32];
 		int res;
@@ -1181,7 +1181,7 @@ HANDLER_DECLARE(mdtm)
 		apr_strftime(strtime, &res, 32, "%Y%m%d%H%M%S", &time);
 		ap_rprintf(r, FTP_C_MDTMOK" %s\r\n",strtime);
 		ap_rflush(r);
-		return FTP_HANDLER_OK;
+		return FTPD_HANDLER_OK;
 	}
 }
 
@@ -1192,24 +1192,24 @@ HANDLER_DECLARE(stor)
 	int flags;
 	int iodone;
 	apr_size_t buffsize;
-    char buff[FTP_IO_BUFFER_MAX];
+    char buff[FTPD_IO_BUFFER_MAX];
 	char *sendbuff;
-	ftp_user_rec *ur = ftp_get_user_rec(r);
-	ftp_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
-					&ftp_module);
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	ftpd_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+					&ftpd_module);
 
 	if (strlen(buffer)==0) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid filename.\r\n");
 		ap_rflush(r);
-		ftp_data_socket_close(ur);
-		return FTP_HANDLER_SERVERERROR;
+		ftpd_data_socket_close(ur);
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	if (apr_filepath_merge(&r->uri,ur->current_directory,buffer,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
 		ap_rflush(r);
-		ftp_data_socket_close(ur);
-		return FTP_HANDLER_SERVERERROR;
+		ftpd_data_socket_close(ur);
+		return FTPD_HANDLER_SERVERERROR;
 	}
 
 	if (ur->restart_position || ((int)data==1)) {
@@ -1217,7 +1217,7 @@ HANDLER_DECLARE(stor)
 		flags = APR_WRITE | APR_CREATE | APR_APPEND;
 		/* Set Method */
 		r->method = apr_pstrdup(r->pool,"APPEND");
-		r->method_number = ftp_methods[FTP_M_APPEND];
+		r->method_number = ftpd_methods[FTPD_M_APPEND];
 		r->the_request = apr_psprintf(r->pool, "APPEND %s", r->uri);
 	} else {
 /* STORe, error out if the file already exists */
@@ -1229,11 +1229,11 @@ HANDLER_DECLARE(stor)
 	}
 	ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, r);
 
-	if (ftp_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
-		ftp_data_socket_close(ur);
-		return FTP_HANDLER_PERMDENY;
+		ftpd_data_socket_close(ur);
+		return FTPD_HANDLER_PERMDENY;
 	}
 
 	if ((res = apr_file_open(&fp, r->filename, flags,
@@ -1242,16 +1242,16 @@ HANDLER_DECLARE(stor)
 					"Unable to write file to disk: %s.", r->filename);
 		ap_rprintf(r, FTP_C_FILEFAIL" %s: unable to open file for writing\r\n",buffer);
 		ap_rflush(r);
-		ftp_data_socket_close(ur);
-		return FTP_HANDLER_SERVERERROR;
+		ftpd_data_socket_close(ur);
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	ap_rprintf(r, FTP_C_DATACONN" Opening data connection\r\n");
 	ap_rflush(r);
-	if (ftp_data_socket_connect(ur,pConfig) != APR_SUCCESS) {
+	if (ftpd_data_socket_connect(ur,pConfig) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_BADSENDCONN" Error accepting connection\r\n");
 		ap_rflush(r);
 		apr_file_close(fp);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 /* Check Restart */
 	if (ur->restart_position) {
@@ -1262,15 +1262,15 @@ HANDLER_DECLARE(stor)
 			ap_rprintf(r, FTP_C_FILEFAIL" Cannot restore a ASCII transfer\r\n");
 			ap_rflush(r);
 			apr_file_close(fp);
-			ftp_data_socket_close(ur);
-			return FTP_HANDLER_SERVERERROR;
+			ftpd_data_socket_close(ur);
+			return FTPD_HANDLER_SERVERERROR;
 		}
 		if (apr_file_seek(fp, APR_SET, &offset)!=APR_SUCCESS) {
 			ap_rprintf(r, FTP_C_FILEFAIL" Unable to set file postition\r\n");
 			ap_rflush(r);
 			apr_file_close(fp);
-			ftp_data_socket_close(ur);
-			return FTP_HANDLER_SERVERERROR;
+			ftpd_data_socket_close(ur);
+			return FTPD_HANDLER_SERVERERROR;
 		}
 		ur->restart_position = 0;
 	}
@@ -1281,7 +1281,7 @@ HANDLER_DECLARE(stor)
 	r->sent_bodyct = 1;
 	r->bytes_sent = 0;
 	while (!iodone) {
-		buffsize = FTP_IO_BUFFER_MAX;
+		buffsize = FTPD_IO_BUFFER_MAX;
 		res = apr_socket_recv(ur->data.pipe, buff, &buffsize);
 		/* did we receive anything? */
 		if (buffsize > 0) {
@@ -1289,7 +1289,7 @@ HANDLER_DECLARE(stor)
 				iodone = 1;
 			}
 			if (!ur->binaryflag) {
-				sendbuff = ftp_ascii_convert(buff, &buffsize, ASCII_TO_LF, r->pool);
+				sendbuff = ftpd_ascii_convert(buff, &buffsize, ASCII_TO_LF, r->pool);
 			} else {
 				sendbuff = buff;
 			}
@@ -1311,58 +1311,58 @@ HANDLER_DECLARE(stor)
 /* Close verything up */
 	ap_rprintf(r, FTP_C_TRANSFEROK" Transfer complete\r\n");
 	ap_rflush(r);
-	ftp_data_socket_close(ur);
+	ftpd_data_socket_close(ur);
 	apr_file_close(fp);
 
-	return FTP_HANDLER_OK;	
+	return FTPD_HANDLER_OK;	
 }
 
 HANDLER_DECLARE(rename)
 {
 	apr_finfo_t finfo;
-	ftp_user_rec *ur = ftp_get_user_rec(r);
-	int rv = FTP_HANDLER_OK;
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	int rv = FTPD_HANDLER_OK;
 
 	/* Whole filename is in buffer */
 	if (apr_filepath_merge(&r->uri,ur->current_directory, buffer,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	/* Set Method */
 	r->method = apr_pstrdup(r->pool,"MOVE");
 	r->method_number = M_MOVE;
 
-	if (ftp_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_RENAMEFAIL" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
-		return FTP_HANDLER_PERMDENY;
+		return FTPD_HANDLER_PERMDENY;
 	}
 	if (!data) {
 		/* Check if file exists. */
 		if (apr_stat(&finfo, r->filename, APR_FINFO_TYPE, r->pool) == APR_SUCCESS) {
 			/* Store the requested filename into session */
 			ur->rename_file = apr_pstrdup(ur->p,r->filename);
-			ur->state = FTP_STATE_RENAME;
+			ur->state = FTPD_STATE_RENAME;
 			ap_rprintf(r, FTP_C_RNFROK" File exists, ready for destination name.\r\n");
 		} else {
 			ap_rprintf(r, FTP_C_RENAMEFAIL" File does not exists.\r\n");
-			rv = FTP_HANDLER_FILENOTFOUND;
+			rv = FTPD_HANDLER_FILENOTFOUND;
 		}
 	} else {
-		ur->state = FTP_STATE_TRANS_NODATA;
+		ur->state = FTPD_STATE_TRANS_NODATA;
 		if (apr_stat(&finfo, r->filename, APR_FINFO_TYPE, r->pool) == APR_SUCCESS) {
 			/* warning file exists cancel rename */
 			ap_rprintf(r, FTP_C_RENAMEFAIL" File already exists.\r\n");
-			rv = FTP_HANDLER_SERVERERROR;
+			rv = FTPD_HANDLER_SERVERERROR;
 		} else {
 			/* destination filename sent, rename */
 			if (apr_file_rename(ur->rename_file, r->filename, r->pool) == APR_SUCCESS) {
 				ap_rprintf(r, FTP_C_RENAMEOK" File renamed.\r\n");
 			} else {
 				ap_rprintf(r, FTP_C_RENAMEFAIL" File rename failed.\r\n");
-				rv = FTP_HANDLER_SERVERERROR;
+				rv = FTPD_HANDLER_SERVERERROR;
 			}
 		}
 	}
@@ -1373,41 +1373,41 @@ HANDLER_DECLARE(rename)
 HANDLER_DECLARE(delete)
 {
 	apr_finfo_t finfo;
-	ftp_user_rec *ur = ftp_get_user_rec(r);
-	int rv = FTP_HANDLER_OK;
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	int rv = FTPD_HANDLER_OK;
 
 	/* Whole filename is in buffer */
 	if (apr_filepath_merge(&r->uri,ur->current_directory, buffer,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	/* Set Method */
 	r->method = apr_pstrdup(r->pool,"DELETE");
 	r->method_number = M_DELETE;
 
-	if (ftp_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
-		return FTP_HANDLER_PERMDENY;
+		return FTPD_HANDLER_PERMDENY;
 	}
 
 	if (apr_stat(&finfo, r->filename, APR_FINFO_TYPE, r->pool)==APR_SUCCESS) {
 		if (finfo.filetype == APR_DIR) {
 			ap_rprintf(r, FTP_C_FILEFAIL" %s: is a directory.\r\n", buffer);
-			rv = FTP_HANDLER_SERVERERROR;
+			rv = FTPD_HANDLER_SERVERERROR;
 		} else {
 			if (apr_file_remove(r->filename, r->pool)==APR_SUCCESS) {
 				ap_rprintf(r, FTP_C_DELEOK" %s: File deleted.\r\n", buffer);
 			} else {
 				ap_rprintf(r, FTP_C_FILEFAIL" %s: Could not delete file.\r\n", buffer);
-				rv = FTP_HANDLER_SERVERERROR;
+				rv = FTPD_HANDLER_SERVERERROR;
 			}
 		}
 	} else {
 		ap_rprintf(r, FTP_C_FILEFAIL" %s: File not found.\r\n", buffer);
-		rv = FTP_HANDLER_FILENOTFOUND;
+		rv = FTPD_HANDLER_FILENOTFOUND;
 	}
 	ap_rflush(r);
 	return rv;
@@ -1416,34 +1416,34 @@ HANDLER_DECLARE(delete)
 HANDLER_DECLARE(mkdir)
 {
 	apr_status_t res;
-	ftp_user_rec *ur = ftp_get_user_rec(r);
-	int rv = FTP_HANDLER_OK;
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	int rv = FTPD_HANDLER_OK;
 
 	/* Whole filename is in buffer */
 	if (apr_filepath_merge(&r->uri,ur->current_directory, buffer,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	/* Set Method */
 	r->method = apr_pstrdup(r->pool,"MKCOL");
 	r->method_number = M_MKCOL;
 
-	if (ftp_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
-		return FTP_HANDLER_PERMDENY;
+		return FTPD_HANDLER_PERMDENY;
 	}
 
 	res = apr_dir_make(r->filename, APR_OS_DEFAULT, r->pool);
 	if (res != APR_SUCCESS) {
 		if (!APR_STATUS_IS_EEXIST(res)) {
 			ap_rprintf(r, FTP_C_FILEFAIL" %s: Could not create directory.\r\n", buffer);
-			rv = FTP_HANDLER_SERVERERROR;
+			rv = FTPD_HANDLER_SERVERERROR;
 		} else {
 			ap_rprintf(r, FTP_C_FILEFAIL" %s: Directory of file already exists.\r\n", buffer);
-			rv = FTP_HANDLER_SERVERERROR;
+			rv = FTPD_HANDLER_SERVERERROR;
 		}
 	} else {
 		ap_rprintf(r, FTP_C_MKDIROK" %s: Directory created.\r\n", buffer);
@@ -1455,30 +1455,30 @@ HANDLER_DECLARE(mkdir)
 HANDLER_DECLARE(rmdir)
 {
 	apr_status_t res;
-	ftp_user_rec *ur = ftp_get_user_rec(r);
-	int rv = FTP_HANDLER_OK;
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	int rv = FTPD_HANDLER_OK;
 
 	/* Whole filename is in buffer */
 	if (apr_filepath_merge(&r->uri,ur->current_directory, buffer,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
 		ap_rflush(r);
-		return FTP_HANDLER_SERVERERROR;
+		return FTPD_HANDLER_SERVERERROR;
 	}
 	/* Set Method */
 	r->method = apr_pstrdup(r->pool,"XRMD");
-	r->method_number = ftp_methods[FTP_M_XRMD];
+	r->method_number = ftpd_methods[FTPD_M_XRMD];
 
-	if (ftp_check_acl(NULL, r)!=OK) {
+	if (ftpd_check_acl(NULL, r)!=OK) {
 		ap_rprintf(r, FTP_C_PERMDENY" %s: Permission Denied.\r\n", buffer);
 		ap_rflush(r);
-		return FTP_HANDLER_PERMDENY;
+		return FTPD_HANDLER_PERMDENY;
 	}
 
 	res = apr_dir_remove(r->filename, r->pool);
 	if (res != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" %s: Could not delete directory.\r\n", buffer);
-		rv = FTP_HANDLER_SERVERERROR;
+		rv = FTPD_HANDLER_SERVERERROR;
 	} else {
 		ap_rprintf(r, FTP_C_MKDIROK" %s: Directory deleted.\r\n", buffer);
 	}
@@ -1488,15 +1488,15 @@ HANDLER_DECLARE(rmdir)
 
 HANDLER_DECLARE(restart)
 {
-	ftp_user_rec *ur = ftp_get_user_rec(r);
-	int rv = FTP_HANDLER_OK;
+	ftpd_user_rec *ur = ftpd_get_user_rec(r);
+	int rv = FTPD_HANDLER_OK;
 
 	ur->restart_position = apr_atoi64(buffer);
 	if (ur->restart_position >= 0) {
 		ap_rprintf(r, FTP_C_RESTOK" Restarting at %d. Send RETR or STOR.\r\n", ur->restart_position);
 	} else {
 		ap_rprintf(r, FTP_C_INVALIDARG" Invalid restart postition.\r\n");
-		rv = FTP_HANDLER_SERVERERROR;
+		rv = FTPD_HANDLER_SERVERERROR;
 	}
 	ap_rflush(r);
 	return rv;

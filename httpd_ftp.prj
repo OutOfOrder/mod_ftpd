@@ -68,7 +68,7 @@ module.include.expanded=1
 module.include.files=\
 	ftp.h\
 	server_config.h\
-	mod_ftp.h
+	mod_ftpd.h
 
 module.source.name=.
 module.source.type=
@@ -76,11 +76,7 @@ module.source.expanded=1
 module.source.files=\
 	ftp_protocol.c\
 	gen_todo.pl\
-	ftp_core.c\
-	providers/dbm/mod_ftp_dbm.c\
-	providers/default/mod_ftp_default.c\
-	providers/dbi/mod_ftp_dbi.c\
-	providers/fail/mod_ftp_fail.c
+	ftp_core.c
 
 module.pixmap.name=.
 module.pixmap.type=

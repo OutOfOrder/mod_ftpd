@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/ftp.h,v 1.20 2003/12/22 06:12:12 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp.h,v 1.21 2004/01/08 04:42:48 urkle Exp $ */
 #ifndef FTP_H
 #define FTP_H
 
@@ -85,7 +85,7 @@
 #include "config.h"
 #endif
 
-#include "mod_ftp.h"
+#include "mod_ftpd.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -93,38 +93,38 @@ extern "C" {
 
 #define MAX_INVALID_CMD 10
 
-module AP_MODULE_DECLARE_DATA ftp_module;
+module AP_MODULE_DECLARE_DATA ftpd_module;
 
 typedef struct {
-    int bEnabled; /* Is FTP Enabled? */
+	int bEnabled; /* Is FTP Enabled? */
 	//char* sFtpRoot; /* The FTP document root */
 	int nMinPort; /* Minimum PASV port to use */
 	int nMaxPort; /* Maximum PASV port to use */
 	int bRealPerms; /* Show real permissionts in file listing */
 	int bAllowPort; /* Whether to allow the PORT command */
-	ftp_provider_list *providers; /* Order of chroot querying */
+	ftpd_provider_list *providers; /* Order of chroot querying */
 	int bAnnounce; /* Annount in the server header */
 	int bAllowFXP; /* Allow pasv and port connections from/to machines other than the client */
 	char *sFakeGroup; /* The fake group name to display for listings */
 	char *sFakeUser; /* The fake user name to display for listings */
-} ftp_svr_config_rec;
+} ftpd_svr_config_rec;
 
 typedef struct {
-} ftp_dir_config_rec;
+} ftpd_dir_config_rec;
 
-apr_hash_t *ap_ftp_hash;
+apr_hash_t *ftpd_hash;
 
-#define FTP_STRING_LENGTH 255
-#define FTP_IO_BUFFER_MAX 262144 /*524288 1048576 */
+#define FTPD_STRING_LENGTH 255
+#define FTPD_IO_BUFFER_MAX 262144 /*524288 1048576 */
 
-int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb);
+int process_ftpd_connection_internal(request_rec *r, apr_bucket_brigade *bb);
 
-typedef struct ftp_handler_st {
-	ap_ftp_handler *func;
+typedef struct ftpd_handler_st {
+	ftpd_handler *func;
 	int states;
 	const char *help_text;
 	void *data;
-} ftp_handler_st;
+} ftpd_handler_st;
 
 HANDLER_DECLARE(quit);
 HANDLER_DECLARE(user);

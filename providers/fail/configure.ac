@@ -1,9 +1,9 @@
 dnl Required initializer
-AC_INIT(mod_ftp_fail, 0.1)
+AC_INIT(mod_ftpd_fail, 0.1)
 AC_PREREQ(2.53)
 AC_CONFIG_HEADERS(config.h)
 
-AC_CONFIG_SRCDIR(mod_ftp_fail.c)
+AC_CONFIG_SRCDIR(mod_ftpd_fail.c)
 
 dnl Add a test for a compiler.
 AC_PROG_CC

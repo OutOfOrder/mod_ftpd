@@ -2,7 +2,7 @@
 
 # Modify these top variables.
 SOURCES = \
-	mod_ftp_default.c
+	@PACKAGE_NAME@.c
 
 HEADERS =
 

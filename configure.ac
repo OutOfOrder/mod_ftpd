@@ -1,5 +1,5 @@
 dnl Required initializer
-AC_INIT(mod_ftp, 0.11.0)
+AC_INIT(mod_ftpd, 0.12.0)
 AC_PREREQ(2.53)
 AC_CONFIG_HEADERS(config.h)
 
@@ -12,7 +12,7 @@ AC_ARG_ENABLE(dbm_provider, [AC_HELP_STRING([--disable-dbm-provider],[Do not com
 		, enable_dbm_provider=yes)
 AC_ARG_ENABLE(default_provider, [AC_HELP_STRING([--disable-default-provider],[Do not compile the default provider])],
 		, enable_default_provider=yes)
-AC_ARG_ENABLE(fail_provider, [AC_HELP_STRING([--disable-fail-provider],[Do not compile the fail provider])],,
+AC_ARG_ENABLE(fail_provider, [AC_HELP_STRING([--disable-fail-provider],[Do not compile the fail provider])],
 		, enable_fail_provider=yes)
 AC_ARG_ENABLE(dbi_provider, [AC_HELP_STRING([--enable-dbi-provider],[Compile the dbi provider])],
 		enable_dbi_provider=yes, )
