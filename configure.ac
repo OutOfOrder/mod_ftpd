@@ -8,7 +8,7 @@ AC_CONFIG_SRCDIR(ftp_core.c)
 dnl Add a test for a compiler.
 AC_PROG_CC
 
-APACHE_VERSION=2.0.48
+APACHE_VERSION=2.0.44
 CHECK_PATH_APACHE($APACHE_VERSION,
    		:,
    		AC_MSG_ERROR([*** Apache version $APACHE_VERSION not found!])
