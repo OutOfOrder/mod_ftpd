@@ -105,9 +105,8 @@ static int ftp_data_socket_connect(ftp_user_rec *ur)
 		ur->state = FTP_TRANS_NODATA;
 		break;
 	case FTP_PIPE_PORT:
-		apr_socket_create_ex(&ur->data.pipe, ur->data.port->family,
+		apr_socket_create(&ur->data.pipe, ur->data.port->family,
 			SOCK_STREAM, APR_PROTO_TCP, ur->data.p);
-		apr_socket_timeout_set(ur->data.pipe, apr_time_from_sec(300));
 		res = apr_socket_connect(ur->data.pipe, ur->data.port);
 		ur->data.type = FTP_PIPE_OPEN;
 		ur->state = FTP_TRANS_NODATA;
@@ -133,6 +132,7 @@ static int ftp_check_acl(const char *newpath, request_rec *r)
 	if ((res = ap_run_access_checker(r)) != OK) {
 		return res;
 	}
+	/* TODO: Figure out why Location doesn't work */
 	return APR_SUCCESS;
 }
 
@@ -427,7 +427,7 @@ int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data)
 				0, ur->data.p)) != APR_SUCCESS) {
 		ap_rprintf(r,FTP_C_PASVFAIL" Unable to assign socket addresss\r\n");
 	}
-	if ((res = apr_socket_create_ex(&ur->data.pasv, listen_addr->family,
+	if ((res = apr_socket_create(&ur->data.pasv, listen_addr->family,
 			SOCK_STREAM, APR_PROTO_TCP, ur->data.p)) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_PASVFAIL" Unable to create Socket\r\n");
 	}
@@ -512,7 +512,6 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 		ap_rflush(r);
 		return OK;
 	}
-	apr_socket_timeout_set(ur->data.pipe,apr_time_from_sec(300));
 
 	if (*buffer != '\0') {
 		if (*buffer == '-') {
@@ -645,13 +644,14 @@ int ap_ftp_handle_type(request_rec *r, char *buffer, void *data)
 	return OK;
 }
 
-int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
+int ap_ftp_handle_retr(request_rec *r, char *filename, void *data)
 {
-	char *filename = ap_getword_white_nc(r->pool,&buffer); 
-	apr_off_t off;
-	apr_size_t size;
+	apr_size_t buffsize;
+	char buff[FTP_IO_BUFFER_MAX];
+	int iodone;
 	apr_file_t *fp;
 	apr_finfo_t finfo;
+	apr_status_t res;
 
 	ftp_user_rec *ur = ap_get_module_config(r->request_config,
 					&ftp_module);
@@ -693,11 +693,25 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 		apr_file_close(fp);
 		return OK;
 	}
-	apr_socket_timeout_set(ur->data.pipe,apr_time_from_sec(300));
 /* Start sending the file */
-	size  = finfo.size;
-	off = 0;
-	apr_socket_sendfile(ur->data.pipe, fp, NULL, &off, &size, 0);
+	iodone = 0;
+	while (!iodone) {
+		buffsize = FTP_IO_BUFFER_MAX;
+		res = apr_file_read(fp, buff, &buffsize);
+				/* did we receive anything? */
+		if (res == APR_SUCCESS) {
+			res = apr_socket_send(ur->data.pipe, buff, &buffsize);
+			if (res != APR_SUCCESS) {
+				ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
+					"Failed to send data to client");
+			}
+		} else if (res != APR_EOF) {
+			ap_log_rerror(APLOG_MARK, APLOG_WARNING, res, r,
+				"Error reading from file");
+		} else {
+			iodone = 1;
+		}
+	}
 /* Close verything up */
 	ap_rprintf(r, FTP_C_TRANSFEROK" Transfer complete\r\n");
 	ap_rflush(r);
@@ -705,14 +719,15 @@ int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data)
 	apr_file_close(fp);
 	return OK;
 }
-int ap_ftp_handle_size(request_rec *r, char *buffer, void *data)
+
+int ap_ftp_handle_size(request_rec *r, char *filename, void *data)
 {
 	apr_finfo_t finfo;
 
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 				&ftp_module);
 
-	if (apr_filepath_merge(&r->uri,ur->current_directory,buffer,
+	if (apr_filepath_merge(&r->uri,ur->current_directory,filename,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
 		ap_rflush(r);
@@ -738,20 +753,20 @@ int ap_ftp_handle_size(request_rec *r, char *buffer, void *data)
 		return OK;
 	}
 	if (finfo.filetype == APR_DIR) {
-		ap_rprintf(r, FTP_C_FILEFAIL" %s: not a plain file\r\n", buffer);
+		ap_rprintf(r, FTP_C_FILEFAIL" %s: not a plain file\r\n", filename);
 	} else {
 		ap_rprintf(r, FTP_C_SIZEOK" %"APR_OFF_T_FMT"\r\n",finfo.size);
 	}
 	ap_rflush(r);
 	return OK;
 }
-int ap_ftp_handle_mdtm(request_rec *r, char *buffer, void *data)
+int ap_ftp_handle_mdtm(request_rec *r, char *filename, void *data)
 {
 	apr_finfo_t finfo;
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 				&ftp_module);
 
-	if (apr_filepath_merge(&r->uri,ur->current_directory,buffer,
+	if (apr_filepath_merge(&r->uri,ur->current_directory,filename,
 			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
 		ap_rflush(r);
@@ -773,7 +788,7 @@ int ap_ftp_handle_mdtm(request_rec *r, char *buffer, void *data)
 		return OK;
 	}
 	if (finfo.filetype == APR_DIR) {
-		ap_rprintf(r, FTP_C_FILEFAIL" %s: not a plain file\r\n", buffer);
+		ap_rprintf(r, FTP_C_FILEFAIL" %s: not a plain file\r\n", filename);
 	} else {
 		char strtime[32];
 		int res;
@@ -785,7 +800,77 @@ int ap_ftp_handle_mdtm(request_rec *r, char *buffer, void *data)
 	ap_rflush(r);
 	return OK;
 }
-int ap_ftp_handle_stor(request_rec *r, char *buffer, void *data)
+int ap_ftp_handle_stor(request_rec *r, char *filename, void *data)
 {
+	apr_file_t *fp;
+	apr_status_t res;
+	int iodone;
+	apr_size_t buffsize;
+    char buff[FTP_IO_BUFFER_MAX];
+	ftp_user_rec *ur = ap_get_module_config(r->request_config,
+				&ftp_module);
+
+	if (apr_filepath_merge(&r->uri,ur->current_directory,filename,
+			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
+		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
+		ap_rflush(r);
+		return OK;
+	}
+	/* Set Method */
+	r->method = apr_pstrdup(r->pool,"STOR");
+	r->method_number = ftp_methods[FTP_M_STOR];
+
+	if (ftp_check_acl(NULL, r)!=OK) {
+		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
+		ap_rflush(r);
+		return OK;
+	}
+	if ((res = apr_file_open(&fp, r->filename, APR_WRITE | APR_CREATE | APR_TRUNCATE,
+			APR_OS_DEFAULT, ur->data.p)) != APR_SUCCESS) {
+		ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
+					"Unable to write file to disk: %s.", r->filename);
+		ap_rprintf(r, FTP_C_FILEFAIL" %s: unable to open file for writing\r\n",filename);
+		ap_rflush(r);
+		ftp_data_socket_close(ur);
+		return OK;
+	}
+	ap_rprintf(r, FTP_C_DATACONN" Opening data connection\r\n");
+	ap_rflush(r);
+	if (ftp_data_socket_connect(ur) != APR_SUCCESS) {
+		ap_rprintf(r, FTP_C_BADSENDCONN" Error accepting connection\r\n");
+		ap_rflush(r);
+		apr_file_close(fp);
+		return OK;
+	}
+/* Start receiving the file */
+	iodone = 0;
+	while (!iodone) {
+		buffsize = FTP_IO_BUFFER_MAX;
+		res = apr_socket_recv(ur->data.pipe, buff, &buffsize);
+		/* did we receive anything? */
+		if (buffsize > 0) {
+			if (res == APR_EOF) { // end of file
+				iodone = 1;
+			}
+			res = apr_file_write(fp, buff, &buffsize);
+			if (res != APR_SUCCESS) {
+				ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
+					"Failed to write data to disk?");
+			}
+		} else {
+			/* we didn't receive anything. end of file?? */
+			if (res != APR_EOF) {
+				ap_log_rerror(APLOG_MARK, APLOG_WARNING, res, r,
+					"0 bytes read without EOF?");
+			}
+			iodone = 1;
+		}
+	}
+/* Close verything up */
+	ap_rprintf(r, FTP_C_TRANSFEROK" Transfer complete\r\n");
+	ap_rflush(r);
+	ftp_data_socket_close(ur);
+	apr_file_close(fp);
+
 	return OK;	
 }

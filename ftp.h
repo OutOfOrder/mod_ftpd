@@ -62,6 +62,15 @@
 #include "httpd.h"
 #include "util_filter.h"
 
+
+#if APR_MAJOR_VERSION < 1
+/* With 1.0 apr_socket_create uses the apr_socket_create_ex prototype.. 
+ * And apr_socket_create_ex is no more.
+ * So lets remap apr_socket_create to apr_socket_create_ex
+ */
+#define apr_socket_create apr_socket_create_ex
+#endif
+
 #ifdef HAVE_CONFIG_H
 /* Undefine these to prevent conflicts between Apache ap_config_auto.h and 
  * my config.h. Only really needed for Apache < 2.0.48, but it can't hurt.
@@ -104,6 +113,7 @@ typedef struct ftp_handler_st {
 } ftp_handler_st;
 
 #define FTP_STRING_LENGTH 255
+#define FTP_IO_BUFFER_MAX 262144 /*524288 1048576 */
 
 /* Handler return codes */
 #define FTP_QUIT                1

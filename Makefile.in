@@ -9,7 +9,7 @@ HEADERS = \
 	ftp.h \
 	server_config.h
 
-CFLAGS = -Wc,-Wall -Wc,-Werror 
+CFLAGS = -Wc,-Wall -Wc,-Werror -Wc,-fno-strict-aliasing
 LDADD = 
 EXTRA_DIST = TODO AUTHORS README NEWS ChangeLog
 

@@ -327,13 +327,14 @@ static void register_hooks(apr_pool_t *p)
 /* File Transfer */
 	ap_ftp_register_handler("RETR", ap_ftp_handle_retr, FTP_TRANS_DATA, 
 		"<sp> file-name", NULL, p);
-	/* TODO: implement store, and append */
-	ap_ftp_register_handler("STOR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ap_ftp_register_handler("STOR", ap_ftp_handle_stor, FTP_TRANS_DATA, 
+		"<sp> file-name", NULL, p);
+	/* TODO: implement and append */
 	ap_ftp_register_handler("APPE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ap_ftp_register_handler("DELE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	/* TODO: implement restore */
 	ap_ftp_register_handler("REST", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
-	/* TODO: implement stou (suggested name upload */
+	/* TODO: implement stou (suggested name upload) */
 	ap_ftp_register_handler("STOU", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Abort/Status Pipelining */

@@ -1,8 +1,7 @@
 TODO
- * Add in character conversion code
+ * Add in character conversion code (Type A mode)
  * Add in logging
  * Start debugging to get all clients to connect correctly
- * Handing ACL to Apache
- * Rework Makefile.am/Configure.in to use apxs to compile the module
+ * Implement timeouts and Poll (apr_poll)
 
 /* */
