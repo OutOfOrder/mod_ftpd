@@ -39,7 +39,7 @@
     <para>This is a FTP Protocol Server module for Apache 2.0 and 2.1. It is based loosely on the mod_pop3 code base, so many thanks to the author of mod_pop3. This is still a developmental module, and directives and features may change without notice from release to release. There is a sample configuration provided at the end of this document. </para>
     <sect2 id="copyright">
       <title>Copyright and License</title>
-      <para>This document, <emphasis>mod_ftpd Manual</emphasis>, is copyrighted &copy; 2002 by <emphasis>Edward Rudd</emphasis>. Permission is granted to copy and distribute this document so long as it is included with the associated application, mod_ftpd, in source or binary form.</para>
+      <para>This document, <emphasis>mod_ftpd Manual</emphasis>, is <trademark class="copyright">Copyright</trademark> 2002 by <emphasis>Edward Rudd</emphasis>. Permission is granted to copy and distribute this document so long as it is included with the associated application, mod_ftpd, in source or binary form.</para>
     </sect2>
     <sect2 id="credits">
       <title>Credits / Contributors</title>
