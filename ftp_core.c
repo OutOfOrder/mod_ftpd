@@ -144,12 +144,14 @@ static void *ftp_create_server_config(apr_pool_t *p, server_rec *s)
 	pConfig->bAllowPort = 1;
 	pConfig->aChrootOrder = apr_array_make(p, 1, sizeof(ftp_provider *));
 	pConfig->bAnnounce = 1;
+	pConfig->sFakeGroup = "ftp";
+	pConfig->sFakeUser = "ftp";
     return pConfig;
 }
 
 static int process_ftp_connection(conn_rec *c)
 {
-    //server_rec *s = c->base_server;
+    server_rec *s = c->base_server;
 	request_rec *r;
 	ftp_user_rec *ur;
 	apr_pool_t *p;
@@ -169,6 +171,7 @@ static int process_ftp_connection(conn_rec *c)
     ur->p = p;
 	apr_pool_create(&ur->data.p, ur->p);
     ur->c = c;
+	ur->s = s;
     ur->state = FTP_AUTH;
 	ur->data.type = FTP_PIPE_NONE;
 
@@ -470,9 +473,21 @@ static const command_rec ftp_cmds[] = {
 				(void *)APR_OFFSETOF(ftp_svr_config_rec, bRealPerms), RSRC_CONF,
                  "Show Real Permissions of files. Default: Off"),
 
+	AP_INIT_TAKE1("FTPFakeGroup", ap_set_server_string_slot,
+				(void *)APR_OFFSETOF(ftp_svr_config_rec, sFakeGroup), RSRC_CONF,
+				"The fake group name to display in directory listings. Default: ftp"),
+
+	AP_INIT_TAKE1("FTPFakeUser", ap_set_server_string_slot,
+				(void *)APR_OFFSETOF(ftp_svr_config_rec, sFakeUser), RSRC_CONF,
+				"The fake user name to display in directory listings. Default: ftp"),
+
 	AP_INIT_FLAG("FTPAllowActive", ap_set_server_flag_slot,
 				(void *)APR_OFFSETOF(ftp_svr_config_rec, bAllowPort), RSRC_CONF,
                  "Allow active(PORT) connections on this server. Default: On"),
+
+	AP_INIT_FLAG("FTPAllowFXP", ap_set_server_flag_slot,
+				(void *)APR_OFFSETOF(ftp_svr_config_rec, bAllowFXP), RSRC_CONF,
+				"Allow FXP transfers (ie. transfer data to a different server/client). Default: Off"),
 
 	AP_INIT_TAKE1("FTPPasvMinPort", ap_set_server_int_slot, 
 				(void *)APR_OFFSETOF(ftp_svr_config_rec, nMinPort), RSRC_CONF,
@@ -481,12 +496,15 @@ static const command_rec ftp_cmds[] = {
 	AP_INIT_TAKE1("FTPPasvMaxPort", ap_set_server_int_slot, 
 				(void *)APR_OFFSETOF(ftp_svr_config_rec, nMaxPort), RSRC_CONF,
 				"Maximum PASV port to use for Data connections. Default: 65535"),
+
 	AP_INIT_ITERATE("FTPChroot", ftp_set_chroot_order,
 				NULL, RSRC_CONF,
 				"List of Chroot prviders to query for chrooting the loging in user. Default: none"),
+
 	AP_INIT_FLAG("FTPServerAnnounce", ap_set_server_flag_slot,
 				(void *)APR_OFFSETOF(ftp_svr_config_rec, bAnnounce), RSRC_CONF,
 				"Whether to announce this module in the server header. Default: On"),
+
 	{ NULL }
 };
 

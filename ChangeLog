@@ -1,6 +1,10 @@
-0.8: ?
+0.8: 2003-12-12
 	updates scoreboard information for mod_status extended display information
 	reworked method names for ACLs, look at the readme and added CHDIR method
+	IP chackes for PORT and PASV, set FTPAllowFXP to disable these checks and
+		allow foreign hosts (other than the command connection)
+	Group and User display overrides
+	Allow removal of mod_ftp from the Server Announce header in HTTP headers.
 
 0.7: 2003-12-07
 	EPRT, and EPSV commands implimented for IPV6

@@ -96,13 +96,16 @@ module AP_MODULE_DECLARE_DATA ftp_module;
 
 typedef struct {
     int bEnabled; /* Is FTP Enabled? */
-	char* sFtpRoot; /* The FTP document root */
+	//char* sFtpRoot; /* The FTP document root */
 	int nMinPort; /* Minimum PASV port to use */
 	int nMaxPort; /* Maximum PASV port to use */
 	int bRealPerms; /* Show real permissionts in file listing */
 	int bAllowPort; /* Whether to allow the PORT command */
 	apr_array_header_t *aChrootOrder; /* Order of chroot querying */
 	int bAnnounce; /* Annount in the server header */
+	int bAllowFXP; /* Allow pasv and port connections from/to machines other than the client */
+	char *sFakeGroup; /* The fake group name to display for listings */
+	char *sFakeUser; /* The fake user name to display for listings */
 } ftp_svr_config_rec;
 
 typedef struct {

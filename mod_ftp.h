@@ -138,7 +138,7 @@ typedef struct ftp_user_rec {
     apr_pool_t *p;
 
 	conn_rec *c;
-    request_rec *r;
+	server_rec *s;
 
     char *user;
     char *passwd;

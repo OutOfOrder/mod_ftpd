@@ -94,13 +94,27 @@ static int ftp_data_socket_close(ftp_user_rec *ur)
 	return OK;
 }
 
-static int ftp_data_socket_connect(ftp_user_rec *ur)
+static int ftp_data_socket_connect(ftp_user_rec *ur, ftp_svr_config_rec *pConfig)
 {
 	apr_status_t res=-1;
+
 	switch (ur->data.type) {
 	case FTP_PIPE_PASV:
 		res = apr_socket_accept(&ur->data.pipe, ur->data.pasv, ur->data.p);
 		apr_socket_close(ur->data.pasv);
+		if (!pConfig->bAllowFXP) {
+			apr_sockaddr_t *data;
+			char *ip_data;
+			apr_socket_addr_get(&data, APR_REMOTE, ur->data.pipe);
+			apr_sockaddr_ip_get(&ip_data,data);
+			if (!apr_sockaddr_equal(data, ur->c->remote_addr)) {
+				ap_log_error(APLOG_MARK, APLOG_ERR, 0, ur->s,
+					"Data connection from foreign host: %s", ip_data);
+				apr_socket_close(ur->data.pipe);
+				apr_pool_clear(ur->data.p);
+				return APR_ECONNREFUSED;
+			}
+		}
 		ur->data.type = FTP_PIPE_OPEN;
 		ur->state = FTP_TRANS_NODATA;
 		break;
@@ -285,7 +299,7 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 		handler_r = ftp_create_subrequest(r,ur);
 
 		ap_ftp_str_toupper(command);
-
+	
 		if (handle_func->states & FTP_HIDE_ARGS) {
 			handler_r->the_request = apr_pstrdup(handler_r->pool, command);
 		} else {
@@ -730,6 +744,17 @@ HANDLER_DECLARE(port)
 		"IP connect to client: %d - %s:%d", family, ipaddr, port);
 	apr_sockaddr_info_get(&ur->data.port,ipaddr, family, port,
 				0, ur->data.p);
+	if (!pConfig->bAllowFXP) {
+		char *ip_data;
+		apr_sockaddr_ip_get(&ip_data,ur->data.port);
+		if (!apr_sockaddr_equal(ur->data.port, r->connection->remote_addr)) {
+			ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+				"Data connection from foreign host: %s", ip_data);
+			ap_rprintf(r, FTP_C_CMDDISABLED" Port to foreign host not allowed %s\r\n",ip_data);
+			ap_rflush(r);
+			return OK;
+		}
+	}
 	ap_rprintf(r, FTP_C_PORTOK" Command Successful\r\n");
 	ap_rflush(r);
 	ur->data.type = FTP_PIPE_PORT;
@@ -754,7 +779,7 @@ HANDLER_DECLARE(list)
 					&ftp_module);
 
 	ap_rputs(FTP_C_DATACONN" Opening ASCII mode data connection for file list.\r\n", r);
-	if ((res = ftp_data_socket_connect(ur)) != APR_SUCCESS) {
+	if ((res = ftp_data_socket_connect(ur,pConfig)) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_BADSENDCONN" Error accepting connection\r\n");
 		ap_rflush(r);
 		return OK;
@@ -826,10 +851,9 @@ HANDLER_DECLARE(list)
 			} else {
 				apr_strftime(strtime, &res, 16, "%b %d %H:%M", &time);
 			}
-		/* TODO: Add Group and User Override commands */
-			apr_gid_name_get(&group,entry.group,r->pool);
-			apr_uid_name_get(&user,entry.user,r->pool);
 			if (pConfig->bRealPerms) {
+				apr_uid_name_get(&user,entry.user,r->pool);
+				apr_gid_name_get(&group,entry.group,r->pool);
 				apr_cpystrn(strperms,"----------",11);
 				if (entry.filetype == APR_DIR)
 					strperms[0]='d';
@@ -854,6 +878,8 @@ HANDLER_DECLARE(list)
 				if (entry.protection & APR_WEXECUTE)
 					strperms[9]='x';
 			} else {
+				user = pConfig->sFakeUser;
+				group = pConfig->sFakeGroup;
 				if (entry.filetype == APR_DIR) {
 					apr_cpystrn(strperms,"drwxr-xr-x",11);
 				/* TODO: config: resolve symlinks */
@@ -918,12 +944,12 @@ HANDLER_DECLARE(retr)
 	apr_status_t res;
 
 	ftp_user_rec *ur = ftp_get_user_rec(r);
+	ftp_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+					&ftp_module);
 
 	apr_filepath_merge(&r->uri, ur->current_directory, buffer,
 			APR_FILEPATH_TRUENAME, r->pool);
 	/* Set Method */
-//	r->method = apr_pstrdup(r->pool,"RETR");
-//	r->method_number = ftp_methods[FTP_M_RETR];
 	r->method = apr_pstrdup(r->pool, "GET");
 	r->method_number = M_GET;
 
@@ -951,7 +977,7 @@ HANDLER_DECLARE(retr)
 	}
 	ap_rprintf(r, FTP_C_DATACONN" Opening data connection\r\n");
 	ap_rflush(r);
-	if (ftp_data_socket_connect(ur) != APR_SUCCESS) {
+	if (ftp_data_socket_connect(ur,pConfig) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_BADSENDCONN" Error accepting connection\r\n");
 		ap_rflush(r);
 		apr_file_close(fp);
@@ -1091,6 +1117,8 @@ HANDLER_DECLARE(stor)
     char buff[FTP_IO_BUFFER_MAX];
 	char *sendbuff;
 	ftp_user_rec *ur = ftp_get_user_rec(r);
+	ftp_svr_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+					&ftp_module);
 
 	if (strlen(buffer)==0) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid filename.\r\n");
@@ -1138,7 +1166,7 @@ HANDLER_DECLARE(stor)
 	}
 	ap_rprintf(r, FTP_C_DATACONN" Opening data connection\r\n");
 	ap_rflush(r);
-	if (ftp_data_socket_connect(ur) != APR_SUCCESS) {
+	if (ftp_data_socket_connect(ur,pConfig) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_BADSENDCONN" Error accepting connection\r\n");
 		ap_rflush(r);
 		apr_file_close(fp);

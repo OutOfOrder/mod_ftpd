@@ -59,14 +59,28 @@ Listen 21
 IV. Configuration Directives
 ----------------------------
 FTPProtocol
-	Whether this server is serving the FTP protocol. The default is off.
+	Whether this server is serving the FTP protocol. The default is Off.
 
 FTPShowRealPermissions
-	Show Real Permissions of files? The default is off.
-	When off, files will show as mode 644, and directories as 755.
+	Show Real Permissions of files? The default is Off.
+	When Off, files will show as mode 644, and directories as 755.
+
+FTPFakeGroup
+	If FTPShowRealPermissions of Off then this is the group name that is
+	displayed in directory listings. Default is ftp.
+
+FTPFakeUser
+	If FTPShowRealPermissions of Off then this is the user name that is
+	displayed in directory listings. Default is ftp.
 
 FTPAllowActive
-	Allow active(PORT) data transfers from the server. The default is on.
+	Allow active(PORT) data transfers from the server. The default is On.
+
+FTPAllowFXP
+	Allow FXP transfer mode.  That is to allow using two control connections to
+	two different server and have them tranfer files directly to eachother. If 
+	this is off then data connections are only allowed to come from the client
+	that has the control connection. Default is Off.
 
 FTPPasvMinPort
 	Minimum PASV port to use for Data connections. The default value is 1024.
@@ -80,6 +94,11 @@ FTPChroot
 	This is the chroot provider order to use for determining what chroot dir the
 	user should be locked into. the providers are separate modules that must be
 	loaded after mod_ftp.so (mod_ftp_dbm is included);
+
+FTPServerAnnounce
+	Setting this to Off will prevent the mod_ftp/VERSION from being added to the
+	server header in Apache HTTP requests. This does not change the initial
+	connection line in an FTP session. The default value is on.
 
 <Limit>
 	To limit what users can and cannot do in directories the Limit and 
