@@ -18,10 +18,10 @@ DISTFILES = $(STD_DIST) $(EXTRA_DIST)
 all: all-subdirs
 
 %.html: %.xml
-	xmlto html-nochunks $<
+	@xmlto html-nochunks $<
 
 %.pdf: %.xml
-	xmlto pdf $<
+	@xmlto pdf $<
 
 all-subdirs install-subdirs update-subdirs clean-subdirs distclean-subdirs:
 	@otarget=`echo $@|sed s/-subdirs//`; \
@@ -36,11 +36,7 @@ all-subdirs install-subdirs update-subdirs clean-subdirs distclean-subdirs:
 			fi; \
 			(cd $$i && $(MAKE) $$target) || exit 1; \
 		fi; \
-	done; \
-
-include:
-	rm -rf include
-	ln -s @APACHE_INCDIR@ include
+	done;
 
 install: install-subdirs
 
@@ -68,16 +64,17 @@ dist:
 			echo $(NEWDESTDIR); \
 			(cd $$i && $(MAKE) DESTDIR=$(builddir)/$(DESTDIR)/$$i $$target) || exit 1; \
 		fi; \
-	done;
+	done; \
 	if test "$$made_local" != "yes"; then \
 		$(MAKE) "local-dist" || exit 1; \
-	fi
-	tar -zcf $(DESTTGZ) $(DESTDIR)
-	rm -rf $(DESTDIR)
+	fi; \
+	tar -zcf $(DESTTGZ) $(DESTDIR); \
+	rm -rf $(DESTDIR);
 
 local-dist: $(DISTFILES)
-	mkdir -p $(DESTDIR)
-	cp -dp --parents $(DISTFILES) $(DESTDIR)
+	@mkdir -p $(DESTDIR); \
+	cp -dp --parents $(DISTFILES) $(DESTDIR); \
+	(cd rfc && $(MAKE) DESTDIR=$(DESTDIR)/rfc local-dist) || exit 1;
 
 .PHONY: include all-subdirs update-subdirs install-subdirs \
 	clean-subdirs distclean-subdirs dist

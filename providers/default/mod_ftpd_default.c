@@ -54,10 +54,11 @@
  */
 
 
+/* $Header: /home/cvs/httpd-ftp/providers/default/mod_ftpd_default.c,v 1.3 2004/01/09 07:25:38 urkle Exp $ */
 #include "httpd.h"
 #include "http_config.h"
 #include "apr_strings.h"
-/*#include "apr_global_mutex.h"*/
+#include "apr_global_mutex.h"
 #include "apr_shm.h"
 #include "http_log.h"
 #include "ap_provider.h"
@@ -71,12 +72,16 @@ typedef struct {
 /* per server configuration */
 typedef struct {
 	const char *chroot_path;
-	/*apr_global_mutex_t *mutex;*/
-	apr_shm_t *counter_shm;
-	ftpd_default_counter_rec *counter;
+	int maxlogins;
+	int server_offset;
 } ftpd_default_server_conf;
 
-#define MOD_FTPD_DEFAULT_SHMEM_CACHE "/tmp/mod_ftpd_default_cache"
+static apr_shm_t *ftpd_counter_shm;
+static ftpd_default_counter_rec *ftpd_counter;
+static char *ftpd_global_mutex_file;
+static apr_global_mutex_t *ftpd_global_mutex;
+
+#define MOD_FTPD_DEFAULT_SHMEM_CACHE "/tmp/mod_ftpd_default"
 
 module AP_MODULE_DECLARE_DATA ftpd_default_module;
 
@@ -84,25 +89,35 @@ module AP_MODULE_DECLARE_DATA ftpd_default_module;
 static void *ftpd_default_create_server_config(apr_pool_t *p, server_rec *s)
 {
 	ftpd_default_server_conf *pConfig = apr_pcalloc(p, sizeof(ftpd_default_server_conf));
+	pConfig->maxlogins = 20;
 	return pConfig;
 }
 
-static apr_status_t ftpd_cleanup_shm(void *s)
+static apr_status_t ftpd_cleanup_shm(void *data)
 {
-	ftpd_default_server_conf *pConfig = ap_get_module_config(((server_rec *)s)->module_config, 
-								&ftpd_default_module);
-	apr_shm_destroy(pConfig->counter_shm);
-	pConfig->counter_shm = NULL;
+	if (ftpd_counter_shm) {
+		apr_shm_destroy(ftpd_counter_shm);
+		ftpd_counter_shm = NULL;
+	}
 	return APR_SUCCESS;
+}
+
+static apr_status_t ftpd_cleanup_locks(void *data)
+{
+	apr_status_t rv = APR_SUCCESS;
+	if (ftpd_global_mutex) {
+		rv = apr_global_mutex_destroy(ftpd_global_mutex);
+	}
+	return rv;
 }
 
 static int ftpd_default_post_conf(apr_pool_t *p, apr_pool_t *log, apr_pool_t *temp,
 								server_rec *s)
 {
 	apr_status_t rv;
-	ftpd_default_server_conf *pConfig = ap_get_module_config(s->module_config, 
-								&ftpd_default_module);
-/*	void *data = NULL;
+	int server_count = 0;
+	server_rec *cur_s;
+	void *data = NULL;
 	const char *userdata_key = "ftpd_default_post_config";
 
 	apr_pool_userdata_get(&data, userdata_key, s->process->pool);
@@ -111,26 +126,46 @@ static int ftpd_default_post_conf(apr_pool_t *p, apr_pool_t *log, apr_pool_t *te
 			apr_pool_cleanup_null, s->process->pool);
 		return OK;
 	}
-	rv = apr_global_mutex_create(&pConfig->mutex, MOD_FTPD_DEFAULT_SHMEM_CACHE,
-			APR_LOCK_DEFAULT,p);*/
+	if (!ftpd_global_mutex_file)
+		ftpd_global_mutex_file = "mod_ftpd_default.tmp.lock";
 
-	rv = apr_shm_create(&pConfig->counter_shm, sizeof(ftpd_default_counter_rec),
+	rv = apr_global_mutex_create(&ftpd_global_mutex, ftpd_global_mutex_file,
+			APR_LOCK_DEFAULT, p);
+	if (rv != APR_SUCCESS) {
+		ap_log_perror(APLOG_MARK, APLOG_EMERG, 0, log,
+			"[mod_ftpd_default.c] - Failed creating global lock mutex! apr_global_mutex_create returned: (%d)", rv);
+		return rv;
+	}
+	apr_pool_cleanup_register(p, NULL, ftpd_cleanup_locks, apr_pool_cleanup_null);
+	for (cur_s = s; cur_s; cur_s = cur_s->next) {
+		ftpd_default_server_conf *pConfig = ap_get_module_config(
+						cur_s->module_config, &ftpd_default_module);
+		if (pConfig) {
+			ap_log_perror(APLOG_MARK, APLOG_STARTUP, 0, log,
+				"config->maxlogins: %d", pConfig->maxlogins);
+			pConfig->server_offset = server_count;
+			server_count++;
+		}
+	}
+
+	rv = apr_shm_create(&ftpd_counter_shm, sizeof(ftpd_default_counter_rec)*server_count,
 			MOD_FTPD_DEFAULT_SHMEM_CACHE, p);
-	apr_pool_cleanup_register(p, (void *)s, ftpd_cleanup_shm, apr_pool_cleanup_null); 
+	ap_log_perror(APLOG_MARK, APLOG_STARTUP, 0, log,
+		"shm return value: %d", rv);
+
+	apr_pool_cleanup_register(p, NULL, ftpd_cleanup_shm, apr_pool_cleanup_null);
 	return OK;
 }
 
 static void ftpd_default_init_child(apr_pool_t *pchild, server_rec *s)
 {
 	apr_status_t rv;
-	ftpd_default_server_conf *pConfig = ap_get_module_config(s->module_config, 
-								&ftpd_default_module);
-/*	rv = apr_global_mutex_child_init(&pConfig->mutex,
-			MOD_FTPD_DEFAULT_SHMEM_CACHE, pchild);*/
-	rv = apr_shm_attach(&pConfig->counter_shm,
+	rv = apr_global_mutex_child_init(&ftpd_global_mutex,
+			ftpd_global_mutex_file, pchild);
+	rv = apr_shm_attach(&ftpd_counter_shm,
 			MOD_FTPD_DEFAULT_SHMEM_CACHE, pchild);
 
-	pConfig->counter = apr_shm_baseaddr_get(pConfig->counter_shm);
+	ftpd_counter = apr_shm_baseaddr_get(ftpd_counter_shm);
 }
 
 static const char * ftpd_default_cmd_chrootpath(cmd_parms *cmd, void *config,
@@ -139,6 +174,24 @@ static const char * ftpd_default_cmd_chrootpath(cmd_parms *cmd, void *config,
 	ftpd_default_server_conf *conf = ap_get_module_config(cmd->server->module_config,
 									&ftpd_default_module);
 	conf->chroot_path = apr_pstrdup(cmd->pool, arg);
+
+	return NULL;
+}
+
+static const char * ftpd_default_cmd_maxlogins(cmd_parms *cmd, void *config,
+									const char *arg)
+{
+	ftpd_default_server_conf *conf = ap_get_module_config(cmd->server->module_config,
+									&ftpd_default_module);
+    const char *err = ap_check_cmd_context(cmd,NOT_IN_DIR_LOC_FILE|NOT_IN_LIMIT);
+	if (err) {
+		return err;
+	}
+
+	conf->maxlogins = apr_atoi64(arg);
+	if (conf->maxlogins < 1) {
+		return apr_psprintf(cmd->pool, "%s must be greater than 0",cmd->cmd->name);
+	}
 
 	return NULL;
 }
@@ -154,24 +207,27 @@ static ftpd_chroot_status_t ftpd_default_map_chroot(const request_rec *r,
 	return FTPD_CHROOT_USER_FOUND;
 }
 
-
 static ftpd_limit_status_t ftpd_default_limit_check(const request_rec *r, 
 											ftpd_limit_check_t check_type)
 {
 	ftpd_default_server_conf *pConfig = ap_get_module_config(r->server->module_config,
 										&ftpd_default_module);
+	apr_global_mutex_lock(ftpd_global_mutex);
 	switch (check_type) {
 	case FTPD_LIMIT_CHECK:
+		if (ftpd_counter[pConfig->server_offset].counter >= pConfig->maxlogins)
+			return FTPD_LIMIT_TOOMANY;
 		break;
 	case FTPD_LIMIT_CHECKIN:
-		pConfig->counter->counter++;
+		ftpd_counter[pConfig->server_offset].counter++;
 		break;
 	case FTPD_LIMIT_CHECKOUT:
-		pConfig->counter->counter--;
+		ftpd_counter[pConfig->server_offset].counter--;
 		break;
 	}
 	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-		"Login count: %d", pConfig->counter->counter);
+		"Login count: %d", ftpd_counter[pConfig->server_offset].counter);
+	apr_global_mutex_unlock(ftpd_global_mutex);
 	return check_type==FTPD_LIMIT_CHECK?FTPD_LIMIT_ALLOW:FTPD_LIMIT_DEFAULT;
 }
 
@@ -186,6 +242,8 @@ static const ftpd_provider ftpd_default_provider =
 static const command_rec ftpd_default_cmds[] = {
 	AP_INIT_TAKE1("FtpDefaultChroot", ftpd_default_cmd_chrootpath, NULL, RSRC_CONF,
                  "Path to set the chroot to."),
+	AP_INIT_TAKE1("FtpDefaultMaxLogins", ftpd_default_cmd_maxlogins, NULL, RSRC_CONF,
+				"Maximum number of logins to the FTP server. The Default is 20."),
     { NULL }
 };
 

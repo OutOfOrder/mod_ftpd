@@ -71,10 +71,6 @@ static ftpd_chroot_status_t ftpd_fail_map_chroot(const request_rec *r,
 }
 
 /* Module initialization structures */
-static const ftpd_hooks_chroot ftpd_hooks_chroot_fail =
-{
-	ftpd_fail_map_chroot		/* map_chroot */
-};
 
 static const ftpd_provider ftpd_fail_provider =
 {

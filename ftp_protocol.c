@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.33 2004/01/08 22:11:31 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.34 2004/01/09 07:25:38 urkle Exp $ */
 #define CORE_PRIVATE
 #include "httpd.h"
 #include "http_protocol.h"
@@ -557,6 +557,9 @@ HANDLER_DECLARE(passwd)
 	/* check to see if there is space in limits */
 	limit_ret = ftpd_call_limit(pConfig, r, FTPD_LIMIT_CHECK);
 	if (limit_ret == FTPD_LIMIT_TOOMANY) {
+		ap_rprintf(r, FTP_C_NOLOGIN"-There are too many users logged in currently.\r\n");
+		ap_rprintf(r, FTP_C_NOLOGIN" Please try agaom later.\r\n");
+		ap_rflush(r);
 		/* Too many users logged in */
 		return FTPD_HANDLER_QUIT;
 	}

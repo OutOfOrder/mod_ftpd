@@ -37,7 +37,7 @@ all-subdirs install-subdirs update-subdirs clean-subdirs distclean-subdirs:
 			fi; \
 			(cd $$i && $(MAKE) $$target) || exit 1; \
 		fi; \
-	done; \
+	done;
 
 include:
 	rm -rf include
@@ -69,16 +69,16 @@ dist:
 			echo $(NEWDESTDIR); \
 			(cd $$i && $(MAKE) DESTDIR=$(builddir)/$(DESTDIR)/$$i $$target) || exit 1; \
 		fi; \
-	done;
+	done; \
 	if test "$$made_local" != "yes"; then \
 		$(MAKE) "local-dist" || exit 1; \
-	fi
-	tar -zcf $(DESTTGZ) $(DESTDIR)
-	rm -rf $(DESTDIR)
+	fi; \
+	tar -zcf $(DESTTGZ) $(DESTDIR); \
+	rm -rf $(DESTDIR);
 
 local-dist: $(DISTFILES)
-	mkdir -p $(DESTDIR)
-	cp -dp --parents $(DISTFILES) $(DESTDIR)
+	@mkdir -p $(DESTDIR); \
+	cp -dp --parents $(DISTFILES) $(DESTDIR);
 
 .PHONY: include all-subdirs update-subdirs install-subdirs \
 	clean-subdirs distclean-subdirs dist

@@ -1,7 +1,13 @@
-0.12.0: ?
-	renamed module to mod_Ftpd
+0.12.0: 2004-01-09
+	renamed module to mod_ftpd
 	converted documentation to DocBook in the docs directory
 	included all referenced RFCs
+	extended providers to provide login limiting functionality.
+	provided sample login limiter in mod_ftpd_default that limits overall 
+		maximum number of users
+	Defaulted make install to not activate the modules.
+	cleaned up makefiles
+	Added dbmchroot script to the dbm provider distribution (oops)
 
 0.11.0: 2004-01-03
 	Fixed a major buffer overflow issue in the main program loop.

@@ -11,12 +11,20 @@
         <address format="linespecific"><email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email></address>
       </affiliation>
     </author>
-    <pubdate>2004-01-07</pubdate>
+    <copyright>
+      <year>2003</year>
+      <year>2004</year>
+      <holder>Edward Rudd</holder>
+    </copyright>
     <revhistory>
       <revision>
-        <revnumber>0.9</revnumber>
+        <revnumber>0.2</revnumber>
+        <date>2004-01-08</date>
+        <revremark>Updated to reflect changes on mod_ftpd 0.12.0</revremark>
+      </revision>
+      <revision>
+        <revnumber>0.1</revnumber>
         <date>2004-01-07</date>
-        <authorinitials>EMR</authorinitials>
         <revremark>Initial Conversion from Text to Docbook</revremark>
       </revision>
     </revhistory>
@@ -33,7 +41,7 @@
       <para> In this document, I have the pleasure of acknowledging: </para>
       <itemizedlist>
         <listitem>
-          <para>Paul Querna <email>chip force-elite.com</email> for testing and bouncing ideas off of.</para>
+          <para>Paul Querna <email>chip force-elite.com</email> for testing and bouncing ideas off of and writing DBI provider.</para>
         </listitem>
       </itemizedlist>
     </sect2>
@@ -68,17 +76,19 @@
 # Load any of the provider modules here (for user specific chroots)
 #LoadModule ftpd_dbm_module       modules/mod_ftpd_dbm.so
 #LoadModule ftpd_dbi_module      modules/mod_ftpd_dbi.so
-#LoadModule ftpd_default_module   modules/mod_ftpd_default.so
+LoadModule ftpd_default_module   modules/mod_ftpd_default.so
 #LoadModule ftpd_fail_module      modules/mod_ftpd_fail.so
 
 Listen 21
 &lt;VirtualHost *:21&gt;
         DocumentRoot /var/ftp
-        FTPprotocol On
-        FTPShowRealPermissions Off
-        FTPAllowActive On
-        FTPMinPort 1024
-        FTPPaxPort 65535
+        FtpProtocol On
+        FtpShowRealPermissions Off
+        FtpAllowActive On
+        FtpMinPort 1024
+        FtpPaxPort 65535
+        FtpLimitOrder default
+        FtpDefaultMaxLogins 100
         &lt;Directory /var/ftp&gt;
                 AuthUserFile /usr/local/httpd/ftp
                 Anonymous_Authoritative On
@@ -116,61 +126,67 @@ Listen 21
       <title>Main Module Directives</title>
       <variablelist>
         <varlistentry>
-          <term>FTPProtocol</term>
+          <term>FtpProtocol</term>
           <listitem>
             <para>Whether this server is serving the FTP protocol. The default is Off</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term>FTPShowRealPermissions</term>
+          <term>FtpShowRealPermissions</term>
           <listitem>
             <para>Show Real Permissions of files? the default is Off. When Off files will show as mode 644, and directories as 755.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term>FTPFakeGroup</term>
+          <term>FtpFakeGroup</term>
           <listitem>
             <para>If FTPShowRealPermissions is OFf then this is the group name that is displayed in directory listings. The default is ftp.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term>FTPFakeUser</term>
+          <term>FtpFakeUser</term>
           <listitem>
             <para>If FTPShowRealPermissions is OFf then this is the user name that is displayed in directory listings. The default is ftp.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term>FTPAllowActive</term>
+          <term>FtpAllowActive</term>
           <listitem>
             <para>Allow active(PORT) data transfers from the server. The default is On.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term>FTPAllowFXP</term>
+          <term>FtpAllowFXP</term>
           <listitem>
             <para>Allow FXP transfer mode. That is to allow using two control connections to two different server and have them transfer files directly to each other. If this is off then data connections are only allowed to come from the client that has the control connection. The default is Off.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term>FTPPasvMinPort</term>
+          <term>FtpPasvMinPort</term>
           <listitem>
             <para>Minimum PASV port to use for Data connections. The default value is 1024. This value must be less than FTPPasvMaxPort.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term>FTPPasvMaxPort</term>
+          <term>FtpPasvMaxPort</term>
           <listitem>
             <para>Maximum PASV port to use for Data connections. The default value is 65535. This value must be greater than FTPPasvMinPort.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term>FTPChroot</term>
+          <term>FtpChrootOrder</term>
           <listitem>
-            <para>This is the chroot provider order to use for determining what chroot dir the user should be locked into. the providers are separate modules that must be loaded after mod_ftps.so (dbm, dbi, default, and fail are included);</para>
+            <para>This is the chroot provider order to use for determining what chroot dir the user should be locked into. The providers are separate modules that must be loaded after mod_ftpd.so (dbm, dbi, default, and fail are included). The default is to do no chroot mapping. A value of none empties the chroot order list.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term>FTPServerAnnounce</term>
+          <term>FtpLimitOrder</term>
+          <listitem>
+            <para>This is the limit provider order to use for determining when too many users are logged into the FTP server. Currently there is only the default provider. As with the Chroot providers, these are separate modules that must be loaded after mod_ftpd.so. The default is to do no limiting. A value of none empties the limit order list.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpServerAnnounce</term>
           <listitem>
             <para>Setting this to Off will prevent the mod_ftpd/VERSION tag from being added to the server header in Apache HTTP requests. This does not change the initial server response when a client connects via FTP to the server. The default value is On.</para>
           </listitem>
@@ -239,18 +255,42 @@ Listen 21
         </varlistentry>
       </variablelist>
     </sect2>
+    <sect2 id="mod_default">
+      <title>FTP Default provider</title>
+      <para>LoadModule ftpd_default_module modules/mod_ftpd_default.so</para>
+      <para>This module is useful to provide a fail-back chroot path if other modules do not provide one for the user attempting to login.</para>
+      <variablelist>
+        <varlistentry>
+          <term>FtpDefaultChroot</term>
+          <listitem>
+            <para>This is the path that this module will return as the chroot.. It will ALWAYS return this path and no other. The default is empty, and the server will use the DocumentRoot as the chroot.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDefaultMaxLogins</term>
+          <listitem>
+            <para>This is the maximum number of logins to allow when this module is listed in the FtpLimitOrder directive. The default is 20, and the value must be greater than zero.</para>
+          </listitem>
+        </varlistentry>
+      </variablelist>
+    </sect2>
+    <sect2 id="mod_fail">
+      <title>FTP Fail provider</title>
+      <para>LoadModule ftpd_fail_module modules/mod_ftpd_fail.so</para>
+      <para>There is no configuration for this module.. Just add it to FtpChrootOrder and any user that hits this module will immediately fail and not be allowed to login. Use this in a chain of modules and this as a fail-back to deny logins if they do not have a chroot assigned.</para>
+    </sect2>
     <sect2 id="mod_dbm">
       <title>FTP DBM provider</title>
       <para>LoadModule ftpd_dbm_module modules/mod_ftpd_dbm.so</para>
       <variablelist>
         <varlistentry>
-          <term>FTPChrootDBM</term>
+          <term>FtpDBMFile</term>
           <listitem>
             <para>The filename of the database to use. Can be absolute or relative to the server root.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
-          <term>FTPChrootDBMType</term>
+          <term>FtpDBMType</term>
           <listitem>
             <para>The type of Database the file is (default,DB,GDBM,NDBM,SDBM)</para>
           </listitem>
@@ -261,24 +301,6 @@ Listen 21
       <title>FTP DBI provider</title>
       <para>LoadModule ftpd_dbi_module modules/mod_ftpd_dbi.so</para>
       <para>Documentation to be written.</para>
-    </sect2>
-    <sect2 id="mod_default">
-      <title>FTP Default provider</title>
-      <para>LoadModule ftpd_default_module modules/mod_ftpd_default.so</para>
-      <para>This module is useful to provide a fail-back chroot path if other modules do not provide one for the user attempting to login.</para>
-      <variablelist>
-        <varlistentry>
-          <term>FTPChrootPath</term>
-          <listitem>
-            <para>This is the path that this module will return as the chroot.. It will ALWAYS return this path and no other. The default is empty, and the server will use the DocumentRoot as the chroot.</para>
-          </listitem>
-        </varlistentry>
-      </variablelist>
-    </sect2>
-    <sect2 id="mod_fail">
-      <title>FTP Fail provider</title>
-      <para>LoadModule ftpd_fail_module modules/mod_ftpd_fail.so</para>
-      <para>There is no configuration for this module.. Just add it to FTPChroot and any user that hits this module will immediately fail and not be allowed to login. Use this in a chain of modules and this as a fail-back to deny logins if they do not have a chroot assigned.</para>
     </sect2>
   </sect1>
   <sect1 id="issues">
@@ -315,7 +337,19 @@ Listen 21
     </itemizedlist>
   </sect1>
   <sect1 id="moreinfo">
-    <title>Further Information</title>
-    <para>You can contact me on <ulink url="irc://irc.freenode.net/">irc.freenode.net</ulink> as nick urkle in the #apache-modules channel. Or you can contact me via my <ulink url="http://www.outoforder.ws/">Web Site</ulink>. Or email me at <email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email>. Please put a meaningful subject line, otherwise the e-mail may be deposited in my junk mail folder and possibly never seen by me. Something like, "mod_ftpd patch" would be quite acceptable.. However, "PLEASE READ THIS NOW" is quite unacceptable and will most likely never be read.</para>
+    <title>Contact Information</title>
+    <para>You can contact me via the following mediums.</para>
+    <itemizedlist>
+      <listitem>
+        <para>nickname urkle on <ulink url="irc://irc.freenode.net/">irc.freenode.net</ulink> in the #apache-modules channel.</para>
+      </listitem>
+      <listitem>
+        <para>My website <ulink url="http://www.outoforder.cc/">http://www.outoforder.cc/</ulink>.</para>
+      </listitem>
+      <listitem>
+        <para>email: <email>eddie &lt;at&gt; omegaware &lt;dot&gt; com</email></para>
+      </listitem>
+    </itemizedlist>
+    <para>Please use a meaningful subject line for e-mail, otherwise your e-mail may be silently deposited in my junk mail folder by my <acronym>SPAM</acronym> filters and possibly never seen by me. Use something like "mod_ftpd patch to implement feature X" would be quite acceptable, however, "PLEASE READ THIS NOW" is quite unacceptable and will most likely never be read.</para>
   </sect1>
 </article>

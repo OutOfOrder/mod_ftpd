@@ -61,30 +61,32 @@ all-subdirs install-subdirs update-subdirs clean-subdirs distclean-subdirs:
 			fi; \
 			(cd $$i && $(MAKE) $$target) || exit 1; \
 		fi; \
-	done; \
+	done;
 
 TODO: TODO_HEADER $(SOURCES) $(HEADERS)
-	./gen_todo.pl
+	@./gen_todo.pl
 
 $(TARGET):
-	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(INCLUDES) $(CFLAGS) $(LDADD) @DEFS@ $(SOURCES) 
-
-include:
-	rm -rf include
-	ln -s @APACHE_INCDIR@ include
+	@@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(INCLUDES) $(CFLAGS) $(LDADD) @DEFS@ $(SOURCES) 
 
 install: install-subdirs
-	@APXS_BIN@ -i -a -n $(subst mod_,,@PACKAGE_NAME@) $(TARGET)
+	@@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) $(TARGET); \
+	echo "**********************************************************************"; \
+	echo "*** mod_ftpd modules have been installed."; \
+	echo "*** Please edit your Apache configuration files and"; \
+	echo "*** add the appropriate LoadModule directives per the documentation"; \
+	echo "*** in docs/mod_ftpd.html"; \
+	echo "**********************************************************************";
 
 update: update-subdirs
 	@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) $(TARGET)
 
 clean: clean-subdirs
-	$(RM) $(OBJ) $(SLO) $(LO) $(TARGET) .deps
+	@$(RM) $(OBJ) $(SLO) $(LO) $(TARGET) .deps
 
 distclean: clean distclean-subdirs
 	$(RM) TODO config.status config.log config.h config.h.in \
-	configure stamp-h stamp-h.in Makefile aclocal.m4
+		configure stamp-h stamp-h.in Makefile aclocal.m4
 	$(RM) -r autom4te-2.53.cache .libs
 
 DESTDIR = @PACKAGE_NAME@-@PACKAGE_VERSION@
@@ -104,21 +106,21 @@ dist:
 			echo $(NEWDESTDIR); \
 			(cd $$i && $(MAKE) DESTDIR=$(builddir)/$(DESTDIR)/$$i $$target) || exit 1; \
 		fi; \
-	done;
+	done; \
 	if test "$$made_local" != "yes"; then \
 		$(MAKE) "local-dist" || exit 1; \
-	fi
-	tar -zcf $(DESTTGZ) $(DESTDIR)
-	rm -rf $(DESTDIR)
+	fi; \
+	tar -zcf $(DESTTGZ) $(DESTDIR); \
+	rm -rf $(DESTDIR);
 
 local-dist: $(DISTFILES)
-	mkdir -p $(DESTDIR)
-	cp -dp --parents $(DISTFILES) $(DESTDIR)
+	@mkdir -p $(DESTDIR); \
+	cp -dp --parents $(DISTFILES) $(DESTDIR);
 
 $(builddir)/.deps: depend
 
 depend: $(SOURCES) $(HEADERS)
-	if test -n "`ls $(srcdir)/*.c 2> /dev/null`"; then \
+	@if test -n "`ls $(srcdir)/*.c 2> /dev/null`"; then \
 		$(CC) -MM -MT $(TARGET) -I@APACHE_INCDIR@ $(srcdir)/*.c > $(builddir)/.deps || true; \
 	fi
 

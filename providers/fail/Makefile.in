@@ -41,22 +41,18 @@ DISTFILES = $(STD_DIST) $(EXTRA_DIST) $(SOURCES) $(HEADERS)
 all: $(TARGET)
 
 $(TARGET):
-	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(CFLAGS) $(INCLUDES) $(LDADD) @DEFS@ $(SOURCES) 
-
-include:
-	rm -rf include
-	ln -s @APACHE_INCDIR@ include
+	@@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(CFLAGS) $(INCLUDES) $(LDADD) @DEFS@ $(SOURCES) 
 
 install:
-	@APXS_BIN@ -i -a -n $(subst mod_,,@PACKAGE_NAME@) @PACKAGE_NAME@.la
+	@@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) @PACKAGE_NAME@.la
 
 update:
-	@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) @PACKAGE_NAME@.la
+	@@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) @PACKAGE_NAME@.la
 
 $(builddir)/.deps: depend
 
 depend: $(SOURCES) $(HEADERS)
-	if test -n "`ls $(srcdir)/*.c 2> /dev/null`"; then \
+	@if test -n "`ls $(srcdir)/*.c 2> /dev/null`"; then \
 		$(CC) -MM -MT $(TARGET) -I@APACHE_INCDIR@ $(INCLUDES) $(srcdir)/*.c > $(builddir)/.deps || true; \
 	fi
 
@@ -87,12 +83,12 @@ dist:
 			(cd $$i && $(MAKE) DESTDIR=$(builddir)/$(DESTDIR)/$$i $$target) || exit 1; \
 		fi; \
 	done; \
-	tar -zcf $(DESTTGZ) $(DESTDIR)
+	tar -zcf $(DESTTGZ) $(DESTDIR); \
 	rm -rf $(DESTDIR);
 
 local-dist: $(DISTFILES)
-	mkdir -p $(DESTDIR)
-	cp -dp --parents $(DISTFILES) $(DESTDIR)
+	@mkdir -p $(DESTDIR); \
+	cp -dp --parents $(DISTFILES) $(DESTDIR);
 
 include $(builddir)/.deps
 
