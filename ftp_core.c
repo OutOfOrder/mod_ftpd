@@ -87,7 +87,7 @@
 #include "ftp.h"
 
 int ftp_methods[FTP_M_LAST];
-
+/* Creates the main request record for the connection */
 static request_rec *ftp_create_request(ftp_user_rec *ur)
 {
     apr_pool_t *p;
@@ -105,23 +105,27 @@ static request_rec *ftp_create_request(ftp_user_rec *ur)
     r->user            = NULL;
     r->ap_auth_type    = NULL;
  
+	r->hostname = apr_pstrdup(r->pool,ur->c->local_ip);
+
     r->allowed_methods = ap_make_method_list(p, 2);
  
     r->headers_in      = apr_table_make(r->pool, 1);
-    r->subprocess_env  = NULL;
+    r->subprocess_env  = apr_table_make(r->pool, 1);
     r->headers_out     = apr_table_make(r->pool, 1);
     r->err_headers_out = apr_table_make(r->pool, 1);
     r->notes           = apr_table_make(r->pool, 5);
  
     r->request_config  = ap_create_request_config(r->pool);
-    ap_run_create_request(r);
+
+	ap_run_create_request(r);
+
     r->per_dir_config  = r->server->lookup_defaults;
  
     r->sent_bodyct     = 0;                      /* bytect isn't for body */
  
     r->output_filters  = ur->c->output_filters;
     r->input_filters   = ur->c->input_filters;
- 
+
     r->status = HTTP_OK;                         /* Until further notice. */
 
     ap_set_module_config(r->request_config, &ftp_module, ur);
@@ -164,7 +168,6 @@ static int process_ftp_connection(conn_rec *c)
     ur = apr_palloc(p, sizeof(*ur));
     ur->p = p;
 	apr_pool_create(&ur->data.p, ur->p);
-	apr_pool_create(&ur->cmdp, ur->p);
     ur->c = c;
     ur->state = FTP_AUTH;
 	ur->data.type = FTP_PIPE_NONE;
@@ -438,7 +441,7 @@ static void register_hooks(apr_pool_t *p)
 	ftp_register_handler("EPRT", HANDLER_FUNC(port), FTP_TRANSACTION,
 		"<sp> |af|addr|port|", (void *)1, p);
 	ftp_register_handler("EPSV", HANDLER_FUNC(pasv), FTP_TRANSACTION,
-		"[ <sp> af|ALL]", NULL, p);
+		"[ <sp> af|ALL]", (void *)1, p);
 /*  LONG passive and port */
 	ftp_register_handler("LPRT", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ftp_register_handler("LPSV", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);

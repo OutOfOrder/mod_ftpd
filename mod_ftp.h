@@ -128,8 +128,8 @@ typedef struct ftp_datacon_rec {
 
 typedef struct ftp_user_rec {
     apr_pool_t *p;
-	apr_pool_t *cmdp;
-    conn_rec *c;
+
+	conn_rec *c;
     request_rec *r;
 
     char *user;

@@ -117,6 +117,7 @@ apr_hash_t *ap_ftp_hash;
 #define FTP_QUIT                1
 #define FTP_USER_UNKNOWN        2
 #define FTP_USER_NOT_ALLOWED    3
+#define FTP_UPDATE_AUTH			4
 
 /* FTP Return codes: Shamelessly borrowed from vsftp/ftpcodes.h */
 #define FTP_C_DATACONN		"150"

@@ -117,7 +117,46 @@ static int ftp_data_socket_connect(ftp_user_rec *ur)
 	return res;
 }
 
-static int ftp_check_acl(const char *newpath, request_rec *r) 
+/* Creates a sub request record for handlers */
+static request_rec *ftp_create_subrequest(request_rec *r, ftp_user_rec *ur)
+{
+	apr_pool_t *rrp;
+	request_rec *rnew;
+	apr_pool_create(&rrp, r->pool);
+
+	rnew = apr_pcalloc(rrp, sizeof(request_rec));
+	rnew->pool = rrp;
+
+	rnew->hostname 		= r->hostname;
+	rnew->request_time 	= r->request_time;
+	rnew->connection 	= r->connection;
+	rnew->server		= r->server;
+
+	rnew->user			= r->user;
+
+	rnew->request_config = ap_create_request_config(rnew->pool);
+
+	rnew->per_dir_config = r->server->lookup_defaults;
+
+	rnew->htaccess = r->htaccess;
+	rnew->allowed_methods = ap_make_method_list(rnew->pool, 2);
+
+	ap_copy_method_list(rnew->allowed_methods, r->allowed_methods);
+
+	ap_set_sub_req_protocol(rnew, r);
+	ap_run_create_request(rnew);
+
+/* TODO: Play with filters in create subreq??? */
+	rnew->output_filters = r->connection->output_filters;
+	rnew->input_filters = r->connection->input_filters;
+	
+	ap_set_module_config(rnew->request_config, &ftp_module, ur);
+	return rnew;
+}
+
+#define ftp_check_acl(a,b) ftp_check_acl_ex(a,b,0)
+
+static int ftp_check_acl_ex(const char *newpath, request_rec *r, int skipauth) 
 {
 	apr_status_t res;
 	if (newpath) {
@@ -138,6 +177,15 @@ static int ftp_check_acl(const char *newpath, request_rec *r)
 	}	
 	if ((res = ap_run_access_checker(r)) != OK) {
 		return res;
+	}
+	/* User authentication checks */
+	if (!skipauth) {
+		if ((res = ap_run_check_user_id(r)) != OK) {
+			return res;
+		}
+		if ((res = ap_run_auth_checker(r)) != OK) {
+			return res;
+		}
 	}
 	return APR_SUCCESS;
 }
@@ -181,11 +229,8 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
     int invalid_cmd = 0;
     apr_size_t len;
     ftp_handler_st *handle_func;
-	apr_pool_t *handler_p;
 	request_rec *handler_r;
     ftp_user_rec *ur = ftp_get_user_rec(r);
-
-	apr_pool_create(&handler_p, r->pool);
 
     while (1) {
         int res;
@@ -224,14 +269,14 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
             invalid_cmd++;
             continue;
         }
-		apr_pool_clear(handler_p);
-		handler_r = apr_palloc(handler_p, sizeof(request_rec));
-		*handler_r = *r; /* duplicate request record in */
-		handler_r->pool = handler_p;
-		if (handle_func->states & FTP_SET_AUTH) {
-        	res = handle_func->func(r, buffer, handle_func->data);
-		} else {
-        	res = handle_func->func(handler_r, buffer, handle_func->data);
+		handler_r = ftp_create_subrequest(r,ur);
+
+       	res = handle_func->func(handler_r, buffer, handle_func->data);
+		apr_pool_destroy(handler_r->pool);
+		if (res == FTP_UPDATE_AUTH) {
+			/* Assign to master request_rec for all subreqs */
+			r->user = apr_pstrdup(r->pool, ur->user);
+		    apr_table_set(r->headers_in, "Authorization", ur->auth_string);
 		}
 		if (res == FTP_QUIT) {
             break;
@@ -287,7 +332,7 @@ HANDLER_DECLARE(passwd)
 
     passwd = apr_psprintf(r->pool, "%s:%s", ur->user,
                           ap_getword_white_nc(r->pool, &buffer));
-    ur->auth_string = apr_psprintf(r->connection->pool, "Basic %s",
+    ur->auth_string = apr_psprintf(r->pool, "Basic %s",
                                    ap_pbase64encode(r->pool, passwd)); 
 	r->user = apr_pstrdup(r->pool, ur->user);
     apr_table_set(r->headers_in, "Authorization", ur->auth_string);
@@ -333,8 +378,8 @@ HANDLER_DECLARE(passwd)
 		ur->current_directory = apr_pstrdup(ur->p,"/");		
 	}
 
-	if ((res = ftp_check_acl(ur->current_directory, r))!=OK) {
-		ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed: %d\r\n", res);
+	if ((res = ftp_check_acl_ex(ur->current_directory, r, 1))!=OK) {
+		ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed\r\n");
 		ap_rflush(r);
 		/* Bail out immediatly if this occurs? */
 		return FTP_QUIT;
@@ -360,7 +405,7 @@ HANDLER_DECLARE(passwd)
     ap_rprintf(r, FTP_C_LOGINOK" User %s logged in.\r\n", ur->user);
     ap_rflush(r);
 	ur->state = FTP_TRANS_NODATA;
-	return OK;
+	return FTP_UPDATE_AUTH;
 }
 
 HANDLER_DECLARE(pwd)
@@ -699,7 +744,7 @@ HANDLER_DECLARE(list)
 	r->method_number = ftp_methods[FTP_M_LIST];
 
 	if (ftp_check_acl(NULL, r)!=OK) {
-		ap_rprintf(r, FTP_C_PERMDENY"550 Permission Denied.\r\n");
+		ap_rprintf(r, FTP_C_PERMDENY" Permission Denied.\r\n");
 		ap_rflush(r);
 		ftp_data_socket_close(ur);
 		return OK;
@@ -730,19 +775,21 @@ HANDLER_DECLARE(list)
 		if (res!=APR_SUCCESS && res!=APR_INCOMPLETE) {
 			break;
 		}
+		if (!apr_strnatcmp(entry.name,".") || !apr_strnatcmp(entry.name,"..")) {
+			continue;
+		}
 		if ((int)data==1) { /* NLST */
 			if (entry.filetype != APR_DIR) {
 				/* TODO: Check for too many slashes in arg buffer */
 				if (*buffer!='\0') {
-					apr_snprintf(buff, 128, "%s/%s\r\n", buffer, entry.name);
+					apr_snprintf(buff, 128, "%s\r\n", ap_make_full_path(r->pool,buffer, entry.name));
 				} else {
 					apr_snprintf(buff, 128, "%s\r\n", entry.name);
 				}
-			}
-		} else { /* LIST */
-			if (!strcmp(entry.name,".") || !strcmp(entry.name,"..")) {
+			} else {
 				continue;
 			}
+		} else { /* LIST */
 			apr_time_exp_lt(&time,entry.mtime);
 			if ( (nowtime - entry.mtime) > apr_time_from_sec(60 * 60 * 24 * 182) ) {
 				apr_strftime(strtime, &res, 16, "%b %d  %Y", &time);
@@ -797,7 +844,7 @@ HANDLER_DECLARE(list)
 				strperms, user, group,
 				entry.size, strtime, entry.name);
 		}
-		res  = strlen(buff);
+		res = strlen(buff);
 		apr_socket_send(ur->data.pipe, buff, &res);
 	}
 	apr_dir_close(dir);
@@ -1002,6 +1049,7 @@ HANDLER_DECLARE(mdtm)
 	ap_rflush(r);
 	return OK;
 }
+
 HANDLER_DECLARE(stor)
 {
 	apr_file_t *fp;
