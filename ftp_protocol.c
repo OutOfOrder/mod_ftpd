@@ -281,6 +281,7 @@ HANDLER_DECLARE(passwd)
 	int itr __attribute__ ((unused));
 	const ftp_provider *provider;
 	apr_status_t res;
+	ftp_chroot_status_t chroot_ret;
 	ftp_user_rec *ur = ftp_get_user_rec(r);
 	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
 					&ftp_module);
@@ -318,7 +319,16 @@ HANDLER_DECLARE(passwd)
 		provider = (ftp_provider *)pConfig->aChrootOrder->elts;
 		for (itr = 0; itr < pConfig->aChrootOrder->nelts; itr++) {
 			if (provider[itr].chroot && provider[itr].chroot->map_chroot) {
-				ur->chroot = provider[itr].chroot->map_chroot(r);
+				chroot_ret = provider[itr].chroot->map_chroot(r, &ur->chroot);
+				if (chroot_ret == FTP_CHROOT_USER_FOUND) {
+					ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, r,
+						"Chroot set to %s", ur->chroot);
+					break; /* We got one fall out */
+				} else {
+					ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, r,
+						"User not found, continuing");
+					continue;  /* User not found check next provider */
+				}
 			} else {
 				ap_log_rerror(APLOG_MARK, APLOG_ERR|APLOG_NOERRNO, 0, r,
 					"Provider '%s' does not provider chroot mapping.",

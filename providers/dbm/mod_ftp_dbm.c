@@ -74,10 +74,11 @@ module AP_MODULE_DECLARE_DATA ftp_dbm_module;
 static void *ftp_dbm_create_server_config(apr_pool_t *p, server_rec *s)
 {
 	ftp_dbm_server_conf *pConfig = apr_pcalloc(p, sizeof(ftp_dbm_server_conf));
+	pConfig->dbtype = "default";
 	return pConfig;
 }
 
-static const char * ftp_dbm_cmd_setdbm(cmd_parms *cmd, void *config,
+static const char * ftp_dbm_cmd_dbmpath(cmd_parms *cmd, void *config,
 									 const char *arg)
 {
 	ftp_dbm_server_conf *conf = ap_get_module_config(cmd->server->module_config,
@@ -91,13 +92,29 @@ static const char * ftp_dbm_cmd_setdbm(cmd_parms *cmd, void *config,
 	return NULL;
 }
 
-const char * ftp_dbm_map_chroot(const request_rec *r)
+static const char * ftp_dbm_cmd_dbmtype(cmd_parms *cmd, void *config,
+									 const char *arg)
+{
+	ftp_dbm_server_conf *conf = ap_get_module_config(cmd->server->module_config,
+									&ftp_dbm_module);
+	conf->dbtype = apr_pstrdup(cmd->pool, arg);
+	if (apr_strnatcmp(conf->dbtype, "default") &&
+			apr_strnatcmp(conf->dbtype, "DB") &&
+			apr_strnatcmp(conf->dbtype, "GDBM") &&
+			apr_strnatcmp(conf->dbtype, "SDBM") &&
+			apr_strnatcmp(conf->dbtype, "NDBM")) {
+		return apr_pstrcat(cmd->pool, "Invalid FTPChrootDBMType: ", arg, NULL);
+	}
+	return NULL;
+}
+
+ftp_chroot_status_t ftp_dbm_map_chroot(const request_rec *r, const char **chroot)
 {
 	apr_status_t res;
 	apr_dbm_t *file;
+	ftp_chroot_status_t ret = FTP_CHROOT_USER_NOT_FOUND;
 	apr_datum_t key,val = { 0 };
 	ftp_user_rec *ur = ftp_get_user_rec(r);
-	const char *chroot = NULL;
 	ftp_dbm_server_conf *pConfig = ap_get_module_config(r->server->module_config,
 										&ftp_dbm_module);
 
@@ -105,24 +122,28 @@ const char * ftp_dbm_map_chroot(const request_rec *r)
 								APR_DBM_READONLY, APR_OS_DEFAULT, r->pool))
 								!= APR_SUCCESS) {
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
-			"Error opening DBM file '%s'.",pConfig->chrootdb_path);
+			"Error opening DBM file: %s",pConfig->chrootdb_path);
+		ret = FTP_CHROOT_FAIL;
 	} else {
 		if (file != NULL) {
 			/* search the DB */
-			key.dsize = 1 + strlen(ur->user);
-			key.dptr = apr_pstrdup(r->pool, ur->user);
+			key.dptr = ur->user;
+			key.dsize = strlen(key.dptr);
+
 			if (apr_dbm_exists(file, key)) {
 				if (apr_dbm_fetch(file, key, &val) == APR_SUCCESS) {
-					chroot = apr_pstrdup(r->pool, val.dptr);
+					*chroot = apr_pstrdup(r->pool, val.dptr);
+					ret = FTP_CHROOT_USER_FOUND;
 				}
 			}
 			apr_dbm_close(file);
 		} else {
 			ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
-				"File is null '%s'.",pConfig->chrootdb_path);
+				"File open failed: %s",pConfig->chrootdb_path);
+			ret = FTP_CHROOT_FAIL;
 		}
 	}
-	return chroot;
+	return ret;
 }
 
 /* Module initialization structures */
@@ -141,9 +162,9 @@ static const ftp_provider ftp_dbm_provider =
 };
 
 static const command_rec ftp_dbm_cmds[] = {
-	AP_INIT_TAKE1("FTPChrootDBM", ftp_dbm_cmd_setdbm, NULL, RSRC_CONF,
+	AP_INIT_TAKE1("FTPChrootDBM", ftp_dbm_cmd_dbmpath, NULL, RSRC_CONF,
                  "Path to Database to use chroot mapping."),
-	AP_INIT_TAKE1("FTPChrootDBMType", ftp_dbm_cmd_setdbm, NULL, RSRC_CONF,
+	AP_INIT_TAKE1("FTPChrootDBMType", ftp_dbm_cmd_dbmtype, NULL, RSRC_CONF,
                  "What type of DBM file to open. default, DB,GDBM,NDBM, SDBM."),
     { NULL }
 };

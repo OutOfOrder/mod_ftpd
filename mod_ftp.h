@@ -192,11 +192,18 @@ FTP_DECLARE(void) ftp_register_provider(apr_pool_t *p,
 const ftp_provider *ftp_lookup_provider(const char *name);
 
 /* chroot hooks */
+typedef enum {
+	FTP_CHROOT_USER_FOUND = 0,	/* User is found and chroot has been set */
+	FTP_CHROOT_USER_NOT_FOUND,	/* User not found pass to next provider */
+	FTP_CHROOT_FAIL
+} ftp_chroot_status_t;
+
 struct ftp_hooks_chroot {
 	/* only one hook really needed right? */
 	/* Get the chroot directory for the specified user */
-	const char * (*map_chroot)(
-		const request_rec *r
+	ftp_chroot_status_t (*map_chroot)(
+		const request_rec *r,
+		const char **chroot
 	);
 
 	void *ctx;
