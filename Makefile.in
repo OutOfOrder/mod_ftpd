@@ -84,7 +84,7 @@ update: update-subdirs
 clean: clean-subdirs
 	$(RM) $(OBJ) $(SLO) $(LO) $(TARGET)
 
-DESTDIR = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
+DESTDIR = @PACKAGE_TARNAME@-@PACKAGE_VERSION@ .deps
 DESTTGZ = $(DESTDIR).tar.gz
 dist: $(DISTFILES)
 	rm -rf $(DESTDIR)
