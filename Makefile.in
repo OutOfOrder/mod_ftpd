@@ -16,9 +16,8 @@ EXTRA_DIST = TODO AUTHORS README NEWS ChangeLog
 #Don't modify anything below here
 
 srcdir = @srcdir@
-VPATH = @srcdir@
 
-all: @PACKAGE_NAME@.la TODO
+all: @PACKAGE_NAME@.la
 
 OBJ = $(SOURCES:.c=.o)
 
@@ -26,7 +25,17 @@ LO = $(SOURCES:.c=.lo)
 
 SLO = $(SOURCES:.c=.slo)
 
-STD_DIST = install-sh missing mkinstalldirs Makefile.in configure.in configure
+STD_DIST = install-sh \
+	config.sub \
+	config.guess \
+	aclocal.m4 \
+	Makefile.in \
+	configure.ac \
+	configure \
+	stamp-h.in \
+	config.h.in
+
+DISTFILES = $(STD_DIST) $(EXTRA_DIST) $(SOURCES) $(HEADERS)
 
 TODO: TODO_HEADER $(SOURCES) $(HEADERS)
 	./gen_todo.pl
@@ -43,7 +52,14 @@ update:
 clean:
 	$(RM) $(OBJ) $(SLO) $(LO) @PACKAGE_NAME@.la
 
-dist:
+DESTDIR = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
+DESTTGZ = $(DESTDIR).tar.gz
+dist: $(DISTFILES)
+	rm -rf $(DESTDIR)
+	mkdir -p $(DESTDIR)
+	cp -dp --parents $(DISTFILES) $(DESTDIR)
+	tar -zcf $(DESTTGZ) $(DESTDIR)
+	rm -rf $(DESTDIR)
 
 distclean: clean
 	$(RM) TODO config.status config.log config.h config.h.in \
