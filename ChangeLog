@@ -1,7 +1,10 @@
-?:?
+0.12.3: 2004-03-06
 	moved shared mem creation code to child_init instead of post_config to fix
 		segfault on startup if apache quit uncleanly.
 	updated/fixed Makefile DIST
+	fixed README documentatin location
+	fixed DBI compilation warning with libdbi 0.7.2
+	put error codes in the error code parameter to some logging calls.
 
 0.12.2: 2004-01-22
 	made sure I set r->user before calling the chroot hook
