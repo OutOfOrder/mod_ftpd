@@ -12,7 +12,8 @@ INCLUDES = -I../..
 
 LDADD = 
 
-EXTRA_DIST = 
+EXTRA_DIST = LICENSE \
+	NOTICE
 
 TARGET = @PACKAGE_NAME@.la
 #Don't modify anything below here

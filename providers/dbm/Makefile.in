@@ -12,7 +12,9 @@ INCLUDES = -I../..
 
 LDADD = 
 
-EXTRA_DIST = dbmchroot
+EXTRA_DIST = dbmchroot \
+	LICENSE \
+	NOTICE
 
 TARGET = @PACKAGE_NAME@.la
 #Don't modify anything below here
