@@ -3,5 +3,7 @@ TODO
  * Start debugging to get all clients to connect correctly
  * Implement timeouts and Poll (apr_poll)
  * Make install needs to install mod_ftp.h and DBI providers dbmchroot
+ * create a conn_rec for the data connection and bucketbrigades to transfer data
+ * update transfer stats for scoreboard and logging
 
 /* */

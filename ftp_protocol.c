@@ -144,6 +144,8 @@ static request_rec *ftp_create_subrequest(request_rec *r, ftp_user_rec *ur)
 	ap_copy_method_list(rnew->allowed_methods, r->allowed_methods);
 
 	ap_set_sub_req_protocol(rnew, r);
+	rnew->assbackwards = 0;
+
 	ap_run_create_request(rnew);
 
 /* TODO: Play with filters in create subreq??? */
@@ -232,6 +234,8 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 	request_rec *handler_r;
     ftp_user_rec *ur = ftp_get_user_rec(r);
 
+	r->the_request = apr_pstrdup(r->pool, "IDLE");
+	ap_update_child_status(r->connection->sbh, SERVER_BUSY_KEEPALIVE, r);
     while (1) {
         int res;
         if ((invalid_cmd > MAX_INVALID_CMD) ||
@@ -239,6 +243,7 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
         {
             break;
         }
+		r->request_time = apr_time_now();
 		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 				"C: %s",buffer);
         command = ap_getword_white_nc(r->pool, &buffer);
@@ -271,7 +276,15 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
         }
 		handler_r = ftp_create_subrequest(r,ur);
 
+		ap_ftp_str_toupper(command);
+		handler_r->the_request = apr_psprintf(handler_r->pool, "%s %s", command, buffer);
+
+		ap_update_child_status(r->connection->sbh, SERVER_BUSY_WRITE, handler_r);
+
        	res = handle_func->func(handler_r, buffer, handle_func->data);
+
+		ap_update_child_status(r->connection->sbh, SERVER_BUSY_KEEPALIVE, r);
+
 		apr_pool_destroy(handler_r->pool);
 		if (res == FTP_UPDATE_AUTH) {
 			/* Assign to master request_rec for all subreqs */
@@ -901,7 +914,6 @@ HANDLER_DECLARE(retr)
 		return OK;
 	}
 
-	/* TODO: hand a subrequest to Apache to retrieve file */
 	if (apr_file_open(&fp, r->filename, APR_READ,
 			APR_OS_DEFAULT, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" %s: file does not exist\r\n", buffer);
