@@ -1,0 +1,9 @@
+#!/bin/sh
+
+configfiles=`find $1 -name "config.m4"`
+
+for configfile in $configfiles; do
+    if [ -r $configfile ]; then
+        echo "sinclude($configfile)"
+    fi
+done
