@@ -107,7 +107,8 @@ module.doc.files=\
 	README\
 	AUTHORS\
 	ChangeLog\
-	TODO.in
+	TODO.in\
+	docs/manual.xml
 
 module.po.expanded=0
 module.po.files=
