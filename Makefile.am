@@ -1,6 +1,6 @@
 ## This is the shared library to be built
 lib_LTLIBRARIES = libhttpd_ftp.la
-
+CFLAGS = -Wall -Werror
 ## Define the source file for the module
 libhttpd_ftp_la_SOURCES = ftp_module.c ftp_protocol.c
 

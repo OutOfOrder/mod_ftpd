@@ -7,11 +7,14 @@ a sample config entry
 
 Listen 21
 <VirtualHost *:21>
-   FTPprotocol on
-<directory /tmp/pop>
-   AuthDBMUserFile /usr/local/httpd/pop3
-   AuthName pop3
-   AuthType Basic
-   require valid-user
-</directory>
+	FTPprotocol on
+	FTPDocumentRoot /tmp/ftp
+	FTPMinPort 1024
+	FTPPaxPort 65535
+	<Directory /tmp/ftp>
+	   AuthDBMUserFile /usr/local/httpd/ftp
+	   AuthName ftp
+	   AuthType Basic
+	   require valid-user
+	</Directory>
 </VirtualHost>
