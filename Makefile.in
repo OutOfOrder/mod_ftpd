@@ -27,8 +27,8 @@ TARGET = @PACKAGE_NAME@.la
 
 PROVIDERS_SUBDIRS = @subdirs@
 
-srcdir = @srcdir@
-builddir = @builddir@
+srcdir = @abs_srcdir@
+builddir = @abs_builddir@
 
 OBJ = $(SOURCES:.c=.o)
 
@@ -63,7 +63,7 @@ all-subdirs install-subdirs update-subdirs clean-subdirs distclean-subdirs:
 			fi; \
 			(cd $$i && $(MAKE) $$target) || exit 1; \
 		fi; \
-	done;
+	done; \
 
 TODO: TODO_HEADER $(SOURCES) $(HEADERS)
 	./gen_todo.pl
@@ -82,21 +82,40 @@ update: update-subdirs
 	@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) $(TARGET)
 
 clean: clean-subdirs
-	$(RM) $(OBJ) $(SLO) $(LO) $(TARGET)
-
-DESTDIR = @PACKAGE_TARNAME@-@PACKAGE_VERSION@ .deps
-DESTTGZ = $(DESTDIR).tar.gz
-dist: $(DISTFILES)
-	rm -rf $(DESTDIR)
-	mkdir -p $(DESTDIR)
-	cp -dp --parents $(DISTFILES) $(DESTDIR)
-	tar -zcf $(DESTTGZ) $(DESTDIR)
-	rm -rf $(DESTDIR)
+	$(RM) $(OBJ) $(SLO) $(LO) $(TARGET) .deps
 
 distclean: clean distclean-subdirs
 	$(RM) TODO config.status config.log config.h config.h.in \
 	configure stamp-h stamp-h.in Makefile
 	$(RM) -r autom4te-2.53.cache
+
+DESTDIR = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
+DESTTGZ = $(DESTDIR).tar.gz
+dist: $(DISTFILES)
+	@rm -rf $(DESTDIR); \
+	list=' $(PROVIDERS_SUBDIRS) $(SUBDIRS)'; \
+	for i in $$list; do \
+		if test -d "$$i"; then \
+			target=local-dist; \
+			echo "Making $$target in $$i"; \
+			if test "$$i" = "."; then \
+				made_local=yes; \
+				target="local-dist"; \
+			fi; \
+			NEWDESTDIR=$(builddir)/$(DESTDIR)/$$i; \
+			echo $(NEWDESTDIR); \
+			(cd $$i && $(MAKE) DESTDIR=$(builddir)/$(DESTDIR)/$$i $$target) || exit 1; \
+		fi; \
+	done;
+	if test "$$made_local" != "yes"; then \
+		$(MAKE) "local-dist" || exit 1; \
+	fi
+	tar -zcf $(DESTTGZ) $(DESTDIR)
+	rm -rf $(DESTDIR)
+
+local-dist:
+	mkdir -p $(DESTDIR)
+	cp -dp --parents $(DISTFILES) $(DESTDIR)
 
 $(builddir)/.deps: depend
 
@@ -108,7 +127,7 @@ depend: $(SOURCES) $(HEADERS)
 include $(builddir)/.deps
 
 .PHONY: include all-subdirs update-subdirs install-subdirs \
-	clean-subdirs distclean-subdirs
+	clean-subdirs distclean-subdirs dist
 
 # Regenerate makefiles
 # autoheader might not change config.h.in, so touch a stamp file.

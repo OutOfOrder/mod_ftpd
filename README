@@ -129,6 +129,12 @@ passes everything to Apache, is should be as secure as Apache.
 * I do not support the ABOR command, currently, nor do I check for the Telnet
 command sequences.. Can someone give me an example client that uses these?
 
+* There is code in there for unfinished features, just ignore it.. It will be 
+either finished or removed in future releases.
+
+* content providers SHOULD check FTP_PLUGIN_VERSION and if it's not the same
+bailout and refuse to compile as the API is going to be different.
+
 ----------------------
 VI. Contact Information
 ----------------------

@@ -63,19 +63,36 @@ depend: $(SOURCES) $(HEADERS)
 clean:
 	$(RM) $(OBJ) $(SLO) $(LO) mod_ftp_dbm.la .deps
 
-DESTDIR = mod-ftp-dbm-0.1
-DESTTGZ = $(DESTDIR).tar.gz
-dist: $(DISTFILES)
-	rm -rf $(DESTDIR)
-	mkdir -p $(DESTDIR)
-	cp -dp --parents $(DISTFILES) $(DESTDIR)
-	tar -zcf $(DESTTGZ) $(DESTDIR)
-	rm -rf $(DESTDIR)
-
 distclean: clean
 	$(RM) TODO config.status config.log config.h config.h.in \
 	configure stamp-h stamp-h.in Makefile
 	$(RM) -r autom4te-2.53.cache
+
+DESTDIR = mod-ftp-dbm-0.1
+DESTTGZ = $(DESTDIR).tar.gz
+dist: $(DISTFILES)
+dist:
+	@rm -rf $(DESTDIR); \
+	list=' $(PROVIDERS_SUBDIRS) $(SUBDIRS)'; \
+	for i in $$list; do \
+		if test -d "$$i"; then \
+			target=dist; \
+			echo "Making $$target in $$i"; \
+			if test "$$i" = "."; then \
+				made_local=yes; \
+				target="local-dist"; \
+			fi; \
+			NEWDESTDIR=$(builddir)/$(DESTDIR)/$$i; \
+			echo $(NEWDESTDIR); \
+			(cd $$i && $(MAKE) DESTDIR=$(builddir)/$(DESTDIR)/$$i $$target) || exit 1; \
+		fi; \
+	done; \
+	tar -zcf $(DESTTGZ) $(DESTDIR)
+	rm -rf $(DESTDIR);
+
+local-dist:
+	mkdir -p $(DESTDIR)
+	cp -dp --parents $(DISTFILES) $(DESTDIR)
 
 include $(builddir)/.deps
 
