@@ -97,8 +97,8 @@ Listen 21
         FtpProtocol On
         FtpShowRealPermissions Off
         FtpAllowActive On
-        FtpMinPort 1024
-        FtpPaxPort 65535
+        FtpPasvMinPort 1024
+        FtpPasvPaxPort 65535
         FtpLimitOrder default
         FtpDefaultMaxLogins 100
         &lt;Directory /var/ftp&gt;
