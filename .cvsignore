@@ -25,3 +25,7 @@ stamp-h
 stamp-h.in
 INSTALL
 .tm_project.cache
+TODO
+config.h
+config.h.in
+include
