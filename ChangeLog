@@ -1,4 +1,4 @@
-0.10.0: ?
+0.10.0: 2003-12-30
 	Fixed a bug where cwd wouldn't change to a directory with spaces.
 	URI's are now URI escaped before being passed to the logger.
 	reworked handler return codes.
