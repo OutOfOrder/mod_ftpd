@@ -1,4 +1,4 @@
-/* $Id: mod_ftpd_default.c,v 1.6 2004/03/10 02:29:05 urkle Exp $ */
+/* $Id: mod_ftpd_default.c,v 1.7 2004/03/10 02:31:20 urkle Exp $ */
 /* Copyright 2003-2004 Edward Rudd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
 */
-/* $Header: /home/cvs/httpd-ftp/providers/default/mod_ftpd_default.c,v 1.6 2004/03/10 02:29:05 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/providers/default/mod_ftpd_default.c,v 1.7 2004/03/10 02:31:20 urkle Exp $ */
 #include "httpd.h"
 #include "http_config.h"
 #include "apr_strings.h"
@@ -90,7 +90,7 @@ static int ftpd_default_post_conf(apr_pool_t *p, apr_pool_t *log, apr_pool_t *te
 		ftpd_global_mutex_file = "mod_ftpd_default.tmp.lock";
 
 	rv = apr_global_mutex_create(&ftpd_global_mutex, ftpd_global_mutex_file,
-			APR_LOCK_DEFAULT, p);
+			APR_HAS_SYSVSEM_SERIALIZE?APR_LOCK_SYSVSEM:APR_LOCK_DEFAULT, p);
 	if (rv != APR_SUCCESS) {
 		ap_log_perror(APLOG_MARK, APLOG_EMERG, rv, log,
 			"[mod_ftpd_default.c] - Failed creating global lock mutex!");
@@ -103,27 +103,6 @@ static int ftpd_default_post_conf(apr_pool_t *p, apr_pool_t *log, apr_pool_t *te
 		pConfig->server_offset = server_count;
 		server_count++;
 	}
-
-	/*rv = apr_shm_create(&ftpd_counter_shm, sizeof(ftpd_default_counter_rec)*server_count,
-			MOD_FTPD_DEFAULT_SHMEM_CACHE, p);
-	if (rv == APR_EEXIST) {
-		ap_log_perror(APLOG_MARK, APLOG_STARTUP, 0, log,
-			"[mod_ftpd_default.c] - shm already exists: reconnecting: %d", rv);
-		rv = apr_shm_attach(&ftpd_counter_shm, MOD_FTPD_DEFAULT_SHMEM_CACHE, p);
-		if (rv == APR_SUCCESS) {
-			rv = apr_shm_destroy(ftpd_counter_shm);
-			ap_log_perror(APLOG_MARK, APLOG_STARTUP, 0, log,
-				"[mod_ftpd_default.c] - shm connected: destroed: %d", rv);
-		}
-		rv = apr_shm_create(&ftpd_counter_shm, sizeof(ftpd_default_counter_rec)*server_count,
-			MOD_FTPD_DEFAULT_SHMEM_CACHE, p);
-	}
-	if (rv != APR_SUCCESS) {
-		return rv;
-	}
-	ap_log_perror(APLOG_MARK, APLOG_STARTUP, 0, log,
-		"[mod_ftpd_default.c] - shm created: %d", rv);
-	apr_pool_cleanup_register(p, NULL, ftpd_cleanup_shm, apr_pool_cleanup_null);*/
 	return OK;
 }
 
