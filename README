@@ -59,24 +59,32 @@ the TODO file for any issues that didn't make their way into this document. And
 of course, if you feel the urge to actually implement something on my TODO list
 feel free to, and submit it to me via a patch.
 
-1. This module has been build using Apache 2.0.48. I have had people test it
+* This module has been build using Apache 2.0.48. I have had people test it
 on 2.0.47 and 2.1 CVS HEAD..  But I have not officially tested it on 2.1 yet.
 When an official release of 2.1 is out, then I wil test and modify my module for
 this branch of Apache.
 
-2. <Location> tags seem to have no effect on access control, not sure why..
-
-3. Transfered files do NOT go through apache filters and bucket brigades.. When
+* Transfered files do NOT go through apache filters and bucket brigades.. When
 I figure them out, I will support that feature.. (dynamic FTP content..)
 
-4. There is currently no support user/group dependent roots.. (ie. a 
+* There is currently no support user/group dependent roots.. (ie. a 
 different FTP root for a specific logged in user). It is, however, being planned
 and will be added in a future release once the base FTP specification is
 implemented.
 
-5. IPv6 Support.. Yup, not in there.. It's in the TODO, I just need to support 
+* IPv6 Support.. Yup, not in there.. It's in the TODO, I just need to support 
 the extended FTP commands, and then hope it works, as I don't have an IPv6
 network setup to test it on.
+
+* I have not load tested this at all.. So I do not know how well it will stand
+up to stress testing.
+
+* The code has not been thoroughly tested for security related issues.. However,
+the code is relatively simple, and all ACL checks go through one function, which
+passes everything to Apache, is should be as secure as Apache.
+
+* I do not support the ABOR command, currently, nor do I check for the Telnet
+command sequences.. Can someone give me an example client that uses these?
 
 ----------------------
 V. Contact Information

@@ -112,6 +112,7 @@ static int ftp_data_socket_connect(ftp_user_rec *ur)
 		ur->state = FTP_TRANS_NODATA;
 		break;
 	default:
+		break;
 	}
 	return res;
 }
@@ -123,17 +124,54 @@ static int ftp_check_acl(const char *newpath, request_rec *r)
 		r->uri = apr_pstrdup(r->pool, newpath);
 	} // else assume uri has already been updated
 
+	if ((res = ap_location_walk(r)) != OK) {
+		return res;
+	}
 	if ((res = ap_run_translate_name(r)) != OK) {
 		return res;
 	}
 	if ((res = ap_run_map_to_storage(r)) != OK) {
 		return res;
 	}
+	if ((res = ap_location_walk(r)) != OK) {
+		return res;
+	}	
 	if ((res = ap_run_access_checker(r)) != OK) {
 		return res;
 	}
-	/* TODO: Figure out why Location doesn't work */
 	return APR_SUCCESS;
+}
+
+
+typedef enum {ASCII_TO_LF, ASCII_TO_CRLF} ascii_direction;
+static char *ftp_ascii_convert(char *buf, apr_size_t *len, ascii_direction way, apr_pool_t *p)
+{
+	char *itr = buf;
+	char *buf2;
+	char temp[FTP_IO_BUFFER_MAX*2];
+	apr_size_t len_itr = 0;
+
+	memset(temp, 0, FTP_IO_BUFFER_MAX * 2);
+	while ((itr - buf) < *len) {
+		switch (way) {
+		case ASCII_TO_CRLF:
+			if (*itr == APR_ASCII_LF) {
+				temp[len_itr++] = APR_ASCII_CR;
+			}
+			temp[len_itr++] = *itr;
+			break;
+		case ASCII_TO_LF:
+			if (*itr != APR_ASCII_CR) {
+				temp[len_itr++] = *itr;
+			}
+			break;
+		}
+		itr++;
+	}
+	*len = len_itr;
+	buf2 = apr_palloc(p, *len);
+	memcpy(buf2, temp, *len);
+	return buf2;
 }
 
 int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
@@ -143,12 +181,15 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
     int invalid_cmd = 0;
     apr_size_t len;
     ftp_handler_st *handle_func;
+	apr_pool_t *handler_p;
+	request_rec *handler_r;
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 					&ftp_module);
 
     //r->uri = apr_pstrdup(r->pool, "ftp:");
 
     //ap_run_map_to_storage(r);
+	apr_pool_create(&handler_p, r->pool);
 
     while (1) {
         int res;
@@ -185,15 +226,22 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
             invalid_cmd++;
             continue;
         }
-        res = handle_func->func(r, buffer, handle_func->data);
-        if (res == FTP_QUIT) {
+		apr_pool_clear(handler_p);
+		handler_r = apr_palloc(handler_p, sizeof(request_rec));
+		*handler_r = *r; /* duplicate request record in */
+		if (handle_func->states & FTP_SET_AUTH) {
+        	res = handle_func->func(r, buffer, handle_func->data, handler_p);
+		} else {
+        	res = handle_func->func(handler_r, buffer, handle_func->data, handler_p);
+		}
+		if (res == FTP_QUIT) {
             break;
         }
     }
     return OK;
 }
 
-int ap_ftp_handle_quit(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(quit)
 {
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 					&ftp_module);
@@ -208,27 +256,27 @@ int ap_ftp_handle_quit(request_rec *r, char *buffer, void *data)
     return FTP_QUIT;
 }
 
-int ap_ftp_handle_user(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(user)
 {
 	char *user;
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 					&ftp_module);
 
-    user = ap_getword_white_nc(r->pool, &buffer);
+    user = ap_getword_white_nc(p, &buffer);
     if (!strcmp(user, "")) {
         ap_rprintf(r, FTP_C_LOGINERR" Please login with USER and PASS.\r\n");
         ap_rflush(r);
         return FTP_USER_NOT_ALLOWED;
     }
-    r->user = ur->user = apr_pstrdup(ur->p, user); 
+    ur->user = apr_pstrdup(ur->p, user);
 
-    ap_rprintf(r, FTP_C_GIVEPWORD" Password required for %s.\r\n", r->user);
+    ap_rprintf(r, FTP_C_GIVEPWORD" Password required for %s.\r\n", ur->user);
     ap_rflush(r);    
 	ur->state = FTP_USER_ACK;
 	return OK;
 }
 
-int ap_ftp_handle_passwd(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(passwd)
 {
 	char *passwd;
 	apr_status_t res;
@@ -236,10 +284,10 @@ int ap_ftp_handle_passwd(request_rec *r, char *buffer, void *data)
 					&ftp_module);
 
     passwd = apr_psprintf(r->pool, "%s:%s", ur->user,
-                          ap_getword_white_nc(r->pool, &buffer));
+                          ap_getword_white_nc(p, &buffer));
     ur->auth_string = apr_psprintf(r->connection->pool, "Basic %s",
-                                   ap_pbase64encode(r->pool, passwd)); 
-
+                                   ap_pbase64encode(p, passwd)); 
+	r->user = apr_pstrdup(r->pool, ur->user);
     apr_table_set(r->headers_in, "Authorization", ur->auth_string);
 
 	if ((res = ftp_check_acl("/", r))!=OK) {
@@ -264,7 +312,7 @@ int ap_ftp_handle_passwd(request_rec *r, char *buffer, void *data)
 	return OK;
 }
 
-int ap_ftp_handle_pwd(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(pwd)
 {
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 					&ftp_module);
@@ -276,21 +324,20 @@ int ap_ftp_handle_pwd(request_rec *r, char *buffer, void *data)
 }
 
 
-int ap_ftp_handle_cd(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(cd)
 {
 	char *patharg;  /* incoming directory change */
 	char *newpath;	/* temp space for merged local path */
-	request_rec *subreq __attribute__ ((unused)); /* Sub request for authorization checking */
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 					&ftp_module);
 
 	if ((int)data==1) {
 		patharg = "..";
 	} else {
-    	patharg = ap_getword_white_nc(r->pool, &buffer);
+    	patharg = ap_getword_white_nc(p, &buffer);
 	}
 	if (apr_filepath_merge(&newpath,ur->current_directory,patharg, 
-			APR_FILEPATH_TRUENAME, r->pool) != APR_SUCCESS) {
+			APR_FILEPATH_TRUENAME, p) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid path.\r\n");
 		ap_rflush(r);
 		return OK;
@@ -302,7 +349,7 @@ int ap_ftp_handle_cd(request_rec *r, char *buffer, void *data)
 		return OK;
 	}
 
-	if (!ap_is_directory(r->pool, r->filename)) {
+	if (!ap_is_directory(p, r->filename)) {
 		ap_rprintf(r, FTP_C_FILEFAIL" '%s': No such file or directory.\r\n",patharg);
 	} else {
 		ur->current_directory = apr_pstrdup(ur->p,newpath);
@@ -312,14 +359,14 @@ int ap_ftp_handle_cd(request_rec *r, char *buffer, void *data)
     return OK;
 }
 
-int ap_ftp_handle_help(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(help)
 {
 	char *command;
 	int column;
 	apr_hash_index_t* hash_itr;
 	ftp_handler_st *handle_func;
 
-	command = ap_getword_white_nc(r->pool, &buffer);
+	command = ap_getword_white_nc(p, &buffer);
 	if (command[0]=='\0') {
 		if (!(int)data) { /* HELP */
 			ap_rprintf(r, FTP_C_HELPOK"-The following commands are implemented.\r\n");
@@ -327,10 +374,10 @@ int ap_ftp_handle_help(request_rec *r, char *buffer, void *data)
 			ap_rprintf(r, FTP_C_FEATOK"-FEAT\r\n");
 		}
 		column = 0;
-		for (hash_itr = apr_hash_first(r->pool,ap_ftp_hash); hash_itr;
+		for (hash_itr = apr_hash_first(p, ap_ftp_hash); hash_itr;
 				hash_itr = apr_hash_next(hash_itr)) {
 			apr_hash_this(hash_itr, (const void **)&command, NULL,(void **)&handle_func);
-			command = apr_pstrdup(r->pool,command);
+			command = apr_pstrdup(p,command);
 			ap_ftp_str_toupper(command);
 			if (!(int)data) { /* HELP */
 				column++;
@@ -382,19 +429,19 @@ int ap_ftp_handle_help(request_rec *r, char *buffer, void *data)
 	return OK;
 }
 
-int ap_ftp_handle_syst(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(syst)
 {
 	ap_rputs(FTP_C_SYSTOK" UNIX Type: L8\r\n",r);
 	ap_rflush(r);
 	return OK;
 }
 
-int ap_ftp_handle_NOOP(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(NOOP)
 {
 	if (!data) {
 		ap_rputs(FTP_C_NOOPOK" Command completed successfully.\r\n",r);
 	} else {
-		char *arg = ap_getword_white_nc(r->pool, &buffer);
+		char *arg = ap_getword_white_nc(p, &buffer);
 		ap_str_tolower(arg);
 		if (!apr_strnatcmp(arg, data)) {
 			ap_rputs(FTP_C_NOOPOK" Command completed successfully.\r\n",r);
@@ -406,7 +453,7 @@ int ap_ftp_handle_NOOP(request_rec *r, char *buffer, void *data)
 	return OK;
 }
 
-int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(pasv)
 {
 	apr_sockaddr_t *listen_addr;
 	apr_port_t port;
@@ -462,7 +509,7 @@ int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data)
 	return OK;
 }
 
-int ap_ftp_handle_port(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(port)
 {
 	int ip1,ip2,ip3,ip4,p1,p2;
 	char *ipaddr;
@@ -489,7 +536,7 @@ int ap_ftp_handle_port(request_rec *r, char *buffer, void *data)
 	return OK;
 }
 
-int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(list)
 {
 	apr_status_t res;
 	apr_dir_t *dir;
@@ -522,7 +569,7 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 		}
 	}
 	apr_filepath_merge(&r->uri, ur->current_directory, buffer,
-		APR_FILEPATH_TRUENAME, r->pool);
+		APR_FILEPATH_TRUENAME, p);
 	/* Set Method */
 	r->method = apr_pstrdup(r->pool,"LIST");
 	r->method_number = ftp_methods[FTP_M_LIST];
@@ -534,14 +581,14 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 		return OK;
 	}
 
-	if (!ap_is_directory(r->pool, r->filename)) {
+	if (!ap_is_directory(p, r->filename)) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Not a directory\r\n");
 		ap_rflush(r);
 		ftp_data_socket_close(ur);
 		return OK;
 	}
 
-	if (apr_dir_open(&dir, r->filename, ur->data.p)!=APR_SUCCESS) {
+	if (apr_dir_open(&dir, r->filename, p)!=APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Error opening directory\r\n");
 		ap_rflush(r);
 		ftp_data_socket_close(ur);
@@ -575,9 +622,9 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 			} else {
 				apr_strftime(strtime, &res, 16, "%b %d %H:%M", &time);
 			}
-
-			apr_gid_name_get(&group,entry.group,ur->data.p);
-			apr_uid_name_get(&user,entry.user,ur->data.p);
+		/* TODO: Add Group and User Override commands */
+			apr_gid_name_get(&group,entry.group,p);
+			apr_uid_name_get(&user,entry.user,p);
 			if (pConfig->bRealPerms) {
 				apr_cpystrn(strperms,"----------",11);
 				if (entry.filetype == APR_DIR)
@@ -621,12 +668,13 @@ int ap_ftp_handle_list(request_rec *r, char *buffer, void *data)
 	return OK;
 }
 
-int ap_ftp_handle_type(request_rec *r, char *buffer, void *data)
+HANDLER_DECLARE(type)
 {
-	char *arg = apr_pstrdup(r->pool, buffer);
+	char *arg;
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 				&ftp_module);
 
+	arg = apr_pstrdup(p, buffer);
 	ap_str_tolower(arg);
 	if (!apr_strnatcmp(arg, "l8") ||
 			!apr_strnatcmp(arg, "l 8") ||
@@ -644,10 +692,12 @@ int ap_ftp_handle_type(request_rec *r, char *buffer, void *data)
 	return OK;
 }
 
-int ap_ftp_handle_retr(request_rec *r, char *filename, void *data)
+HANDLER_DECLARE(retr)
 {
 	apr_size_t buffsize;
 	char buff[FTP_IO_BUFFER_MAX];
+	char *filename = buffer;
+	char *sendbuff;
 	int iodone;
 	apr_file_t *fp;
 	apr_finfo_t finfo;
@@ -671,7 +721,7 @@ int ap_ftp_handle_retr(request_rec *r, char *filename, void *data)
 
 	/* TODO: hand a subrequest to Apache to retrieve file */
 	if (apr_file_open(&fp, r->filename, APR_READ | APR_SENDFILE_ENABLED,
-			APR_OS_DEFAULT, ur->data.p) != APR_SUCCESS) {
+			APR_OS_DEFAULT, p) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" %s: file does not exist\r\n",filename);
 		ap_rflush(r);
 		ftp_data_socket_close(ur);
@@ -700,7 +750,16 @@ int ap_ftp_handle_retr(request_rec *r, char *filename, void *data)
 		res = apr_file_read(fp, buff, &buffsize);
 				/* did we receive anything? */
 		if (res == APR_SUCCESS) {
-			res = apr_socket_send(ur->data.pipe, buff, &buffsize);
+			if (!ur->binaryflag) {
+				ap_log_rerror(APLOG_MARK, APLOG_NOTICE | APLOG_NOERRNO, 0, r,
+					"Buffsize: %d", buffsize);
+				sendbuff = ftp_ascii_convert(buff, &buffsize, ASCII_TO_CRLF, p);
+				ap_log_rerror(APLOG_MARK, APLOG_NOTICE | APLOG_NOERRNO, 0, r,
+					"Buffsize 2: %d", buffsize);
+			} else {
+				sendbuff = buff;
+			}
+			res = apr_socket_send(ur->data.pipe, sendbuff, &buffsize);
 			if (res != APR_SUCCESS) {
 				ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
 					"Failed to send data to client");
@@ -720,10 +779,10 @@ int ap_ftp_handle_retr(request_rec *r, char *filename, void *data)
 	return OK;
 }
 
-int ap_ftp_handle_size(request_rec *r, char *filename, void *data)
+HANDLER_DECLARE(size)
 {
 	apr_finfo_t finfo;
-
+	char *filename=buffer;
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 				&ftp_module);
 
@@ -747,7 +806,7 @@ int ap_ftp_handle_size(request_rec *r, char *filename, void *data)
 		ap_rflush(r);
 		return OK;		
 	}
-	if (apr_stat(&finfo, r->filename, APR_FINFO_SIZE | APR_FINFO_TYPE, ur->data.p)!=APR_SUCCESS) {
+	if (apr_stat(&finfo, r->filename, APR_FINFO_SIZE | APR_FINFO_TYPE, p)!=APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Error stating file\r\n");
 		ap_rflush(r);
 		return OK;
@@ -760,9 +819,10 @@ int ap_ftp_handle_size(request_rec *r, char *filename, void *data)
 	ap_rflush(r);
 	return OK;
 }
-int ap_ftp_handle_mdtm(request_rec *r, char *filename, void *data)
+HANDLER_DECLARE(mdtm)
 {
 	apr_finfo_t finfo;
+	char *filename=buffer;
     ftp_user_rec *ur = ap_get_module_config(r->request_config,
 				&ftp_module);
 
@@ -782,7 +842,7 @@ int ap_ftp_handle_mdtm(request_rec *r, char *filename, void *data)
 		return OK;
 	}
 
-	if (apr_stat(&finfo, r->filename, APR_FINFO_MTIME | APR_FINFO_TYPE, ur->data.p)!=APR_SUCCESS) {
+	if (apr_stat(&finfo, r->filename, APR_FINFO_MTIME | APR_FINFO_TYPE, p)!=APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Error stating file\r\n");
 		ap_rflush(r);
 		return OK;
@@ -800,13 +860,15 @@ int ap_ftp_handle_mdtm(request_rec *r, char *filename, void *data)
 	ap_rflush(r);
 	return OK;
 }
-int ap_ftp_handle_stor(request_rec *r, char *filename, void *data)
+HANDLER_DECLARE(stor)
 {
 	apr_file_t *fp;
 	apr_status_t res;
 	int iodone;
 	apr_size_t buffsize;
     char buff[FTP_IO_BUFFER_MAX];
+	char *sendbuff;
+	char *filename = buffer;
 	ftp_user_rec *ur = ap_get_module_config(r->request_config,
 				&ftp_module);
 
@@ -826,7 +888,7 @@ int ap_ftp_handle_stor(request_rec *r, char *filename, void *data)
 		return OK;
 	}
 	if ((res = apr_file_open(&fp, r->filename, APR_WRITE | APR_CREATE | APR_TRUNCATE,
-			APR_OS_DEFAULT, ur->data.p)) != APR_SUCCESS) {
+			APR_OS_DEFAULT, p)) != APR_SUCCESS) {
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
 					"Unable to write file to disk: %s.", r->filename);
 		ap_rprintf(r, FTP_C_FILEFAIL" %s: unable to open file for writing\r\n",filename);
@@ -852,7 +914,16 @@ int ap_ftp_handle_stor(request_rec *r, char *filename, void *data)
 			if (res == APR_EOF) { // end of file
 				iodone = 1;
 			}
-			res = apr_file_write(fp, buff, &buffsize);
+			if (!ur->binaryflag) {
+				ap_log_rerror(APLOG_MARK, APLOG_NOTICE | APLOG_NOERRNO, 0, r,
+					"Buffsize: %d", buffsize);
+				sendbuff = ftp_ascii_convert(buff, &buffsize, ASCII_TO_LF, p);
+				ap_log_rerror(APLOG_MARK, APLOG_NOTICE | APLOG_NOERRNO, 0, r,
+					"Buffsize 2: %d", buffsize);
+			} else {
+				sendbuff = buff;
+			}
+			res = apr_file_write(fp, sendbuff, &buffsize);
 			if (res != APR_SUCCESS) {
 				ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
 					"Failed to write data to disk?");
@@ -873,4 +944,40 @@ int ap_ftp_handle_stor(request_rec *r, char *filename, void *data)
 	apr_file_close(fp);
 
 	return OK;	
+}
+
+HANDLER_DECLARE(rename)
+{
+	ftp_user_rec *ur = ap_get_module_config(r->request_config,
+			&ftp_module);
+
+	/* Whole filename is in buffer */
+	if (apr_filepath_merge(&r->uri,ur->current_directory, buffer,
+			APR_FILEPATH_TRUENAME|APR_FILEPATH_NOTRELATIVE, r->pool) != APR_SUCCESS) {
+		ap_rprintf(r, FTP_C_FILEFAIL" Invalid file name.\r\n");
+		ap_rflush(r);
+		return OK;
+	}
+	/* Set Method */
+	r->method = apr_pstrdup(r->pool,"RNTO");
+	r->method_number = ftp_methods[FTP_M_RNTO];
+
+	if (ftp_check_acl(NULL, r)!=OK) {
+		ap_rprintf(r, FTP_C_RENAMEFAIL" %s: Permission Denied.\r\n", buffer);
+		ap_rflush(r);
+		return OK;
+	}
+	if (!data) {
+		/* Store the requested filename into session */
+		ur->rename_file = apr_pstrdup(ur->p,r->filename);
+		ur->state = FTP_TRANS_RENAME;
+		ap_rprintf(r, FTP_C_RNFROK" File exists, ready for destination name");
+	} else {
+		/* destination filename sent, rename */
+		//apr_file_rename(ur->rename_file, r->filename, p);
+		ur->state = FTP_TRANS_NODATA;
+		ap_rprintf(r, FTP_C_RENAMEOK" File renamed");
+	}
+	ap_rflush(r);
+	return OK;
 }

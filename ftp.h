@@ -59,6 +59,7 @@
 #include "apr.h"
 #include "apr_md5.h"
 #include "apr_hash.h"
+#include "apr_version.h"
 #include "httpd.h"
 #include "util_filter.h"
 
@@ -102,15 +103,6 @@ typedef struct {
 } ftp_config_rec;
 
 apr_hash_t *ap_ftp_hash;
-
-typedef int ap_ftp_handler(request_rec *r, char *a, void *d);
-
-typedef struct ftp_handler_st {
-	ap_ftp_handler *func;
-	int states;
-	const char *help_text;
-	void *data;
-} ftp_handler_st;
 
 #define FTP_STRING_LENGTH 255
 #define FTP_IO_BUFFER_MAX 262144 /*524288 1048576 */
@@ -170,12 +162,28 @@ typedef struct ftp_handler_st {
 #define FTP_C_FILEFAIL		"550"
 #define FTP_C_PERMDENY		"550"
 #define FTP_C_UPLOADFAIL	"553"
+#define FTP_C_RENAMEFAIL	"553"
 
 /* Current Data Pipe state */
-typedef enum { FTP_PIPE_NONE, FTP_PIPE_PASV, FTP_PIPE_PORT, FTP_PIPE_OPEN} ftp_pipe_state;
+typedef enum {
+	FTP_PIPE_NONE,
+	FTP_PIPE_PASV,
+	FTP_PIPE_PORT,
+	FTP_PIPE_OPEN
+} ftp_pipe_state;
 
 /* connection state */
-typedef enum {FTP_AUTH = 1, FTP_USER_ACK = 2, FTP_TRANS_NODATA = 4, FTP_TRANS_DATA = 8, FTP_NOT_IMPLEMENTED = 16, FTP_FEATURE = 32} ftp_state;
+typedef enum {
+	FTP_AUTH 			= 0x01,
+	FTP_USER_ACK 		= 0x02,
+	FTP_TRANS_NODATA 	= 0x04,
+	FTP_TRANS_DATA 		= 0x08,
+	FTP_TRANS_RENAME	= 0x10,
+	FTP_NOT_IMPLEMENTED = 0x20,
+	FTP_FEATURE 		= 0x40,
+	FTP_SET_AUTH 		= 0x80
+} ftp_state;
+
 /* All States does not contain FTP_NOT_IMPLEMENTED */
 #define FTP_ALL_STATES FTP_AUTH | FTP_USER_ACK | FTP_TRANS_NODATA | FTP_TRANS_DATA
 /* Transaction state is both DATA and NODATA */
@@ -194,6 +202,7 @@ enum {
 
 typedef struct ftp_user_rec {
     apr_pool_t *p;
+	apr_pool_t *cmdp;
     conn_rec *c;
     request_rec *r;
 
@@ -202,10 +211,14 @@ typedef struct ftp_user_rec {
     char *auth_string;
 
 	char *current_directory;
+
 	int binaryflag;
+
+	char *rename_file;
+
 	struct {
-		ftp_pipe_state type;
 		apr_pool_t *p;
+		ftp_pipe_state type;
 		union {
 			apr_socket_t *pasv;
 			apr_sockaddr_t *port;
@@ -215,37 +228,57 @@ typedef struct ftp_user_rec {
 
     ftp_state state;
 
-/*    apr_file_t *fp;
-    apr_mmap_t *mm;*/
-    /* we only compute one ctx at a time, but it is a lot easier to
-     * keep this in the user_rec struct, because we won't have to 
-     * re-allocate space for it every time we need one.
-     */
-/*    apr_md5_ctx_t *ctx;*/
 } ftp_user_rec;
 
 int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb);
 
+#define HANDLER_PROTOTYPE request_rec *r, char *buffer, void *data, apr_pool_t *p
+
+typedef int ap_ftp_handler(HANDLER_PROTOTYPE);
+
+typedef struct ftp_handler_st {
+	ap_ftp_handler *func;
+	int states;
+	const char *help_text;
+	void *data;
+} ftp_handler_st;
+
 void ap_ftp_register_handler(char *key, ap_ftp_handler *func, int states,
 							const char *help_text, void *data, apr_pool_t *p);
+
 void ap_ftp_str_toupper(char *str);
 
-int ap_ftp_handle_quit(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_user(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_passwd(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_pwd(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_cd(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_help(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_syst(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_NOOP(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_port(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_list(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_type(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_size(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_mdtm(request_rec *r, char *buffer, void *data);
-int ap_ftp_handle_stor(request_rec *r, char *buffer, void *data);
+#define MOD_PREFIX(name) mod_ftp_##name
+#define MOD_FUNC(name) MOD_PREFIX(name)
+#define MOD_STATIC(type,name) static type MOD_PREFIX(name)
+#define MOD_EXPORT(type,name) type MOD_PREFIX(name)
+#ifdef ALL_STATIC
+#	define MOD_DECLARE(type,name) MOD_STATIC(type, name)
+#else
+#	define MOD_DECLARE(type,name) MOD_EXPORT(type, name)
+#endif
+
+#define HANDLER_PREFIX(name)  handler_##name
+#define HANDLER_FUNC(name)  MOD_FUNC(HANDLER_PREFIX(name))
+#define HANDLER_DECLARE(name) MOD_DECLARE(int,HANDLER_PREFIX(name)) (HANDLER_PROTOTYPE)
+
+HANDLER_DECLARE(quit);
+HANDLER_DECLARE(user);
+HANDLER_DECLARE(passwd);
+HANDLER_DECLARE(pwd);
+HANDLER_DECLARE(cd);
+HANDLER_DECLARE(help);
+HANDLER_DECLARE(syst);
+HANDLER_DECLARE(NOOP);
+HANDLER_DECLARE(pasv);
+HANDLER_DECLARE(port);
+HANDLER_DECLARE(list);
+HANDLER_DECLARE(type);
+HANDLER_DECLARE(retr);
+HANDLER_DECLARE(size);
+HANDLER_DECLARE(mdtm);
+HANDLER_DECLARE(stor);
+HANDLER_DECLARE(rename);
 
 #ifdef __cplusplus
 }
