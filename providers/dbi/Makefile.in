@@ -1,0 +1,119 @@
+# @configure_input@
+
+# Modify these top variables.
+SOURCES = \
+	mod_ftp_dbi.c
+
+HEADERS =
+
+CFLAGS = -Wc,-Wall -Wc,-Werror -Wc,-fno-strict-aliasing
+
+INCLUDES = -I../.. -I/usr/local/include
+
+LDADD = -ldbi
+
+EXTRA_DIST = 
+
+TARGET = @PACKAGE_NAME@.la
+#Don't modify anything below here
+
+srcdir = @srcdir@
+builddir = @builddir@
+
+OBJ = $(SOURCES:.c=.o)
+
+LO = $(SOURCES:.c=.lo)
+
+SLO = $(SOURCES:.c=.slo)
+
+STD_DIST = install-sh \
+	config.sub \
+	config.guess \
+	aclocal.m4 \
+	Makefile.in \
+	configure.ac \
+	configure \
+	stamp-h.in \
+	config.h.in
+
+DISTFILES = $(STD_DIST) $(EXTRA_DIST) $(SOURCES) $(HEADERS)
+
+all: $(TARGET)
+
+$(TARGET):
+	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(CFLAGS) $(INCLUDES) $(LDADD) @DEFS@ $(SOURCES) 
+
+include:
+	rm -rf include
+	ln -s @APACHE_INCDIR@ include
+
+install:
+	@APXS_BIN@ -i -a -n $(subst mod_,,@PACKAGE_NAME@) @PACKAGE_NAME@.la
+
+update:
+	@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) @PACKAGE_NAME@.la
+
+$(builddir)/.deps: depend
+
+depend: $(SOURCES) $(HEADERS)
+	if test -n "`ls $(srcdir)/*.c 2> /dev/null`"; then \
+		$(CC) -MM -MT $(TARGET) -I@APACHE_INCDIR@ $(INCLUDES) $(srcdir)/*.c > $(builddir)/.deps || true; \
+	fi
+
+clean:
+	$(RM) $(OBJ) $(SLO) $(LO) @PACKAGE_NAME@.la .deps
+
+distclean: clean
+	$(RM) TODO config.status config.log config.h config.h.in \
+	configure stamp-h stamp-h.in Makefile
+	$(RM) -r autom4te-2.53.cache
+
+DESTDIR = @PACKAGE_TARNAME@-@PACKAGE_VERSION@
+DESTTGZ = $(DESTDIR).tar.gz
+dist: $(DISTFILES)
+dist:
+	@rm -rf $(DESTDIR); \
+	list=' $(PROVIDERS_SUBDIRS) $(SUBDIRS)'; \
+	for i in $$list; do \
+		if test -d "$$i"; then \
+			target=dist; \
+			echo "Making $$target in $$i"; \
+			if test "$$i" = "."; then \
+				made_local=yes; \
+				target="local-dist"; \
+			fi; \
+			NEWDESTDIR=$(builddir)/$(DESTDIR)/$$i; \
+			echo $(NEWDESTDIR); \
+			(cd $$i && $(MAKE) DESTDIR=$(builddir)/$(DESTDIR)/$$i $$target) || exit 1; \
+		fi; \
+	done; \
+	tar -zcf $(DESTTGZ) $(DESTDIR)
+	rm -rf $(DESTDIR);
+
+local-dist:
+	mkdir -p $(DESTDIR)
+	cp -dp --parents $(DISTFILES) $(DESTDIR)
+
+include $(builddir)/.deps
+
+.PHONY:
+
+# Regenerate makefiles
+# autoheader might not change config.h.in, so touch a stamp file.
+$(srcdir)/config.h.in: stamp-h.in
+$(srcdir)/stamp-h.in: configure.ac aclocal.m4
+	cd $(srcdir) && autoheader-2.53
+	echo timestamp > $(srcdir)/stamp-h.in
+
+config.h: stamp-h
+stamp-h: config.h.in config.status
+	./config.status
+
+$(srcdir)/configure: configure.ac aclocal.m4
+	cd $(srcdir) && autoconf-2.53
+
+Makefile: Makefile.in config.status
+	./config.status
+
+config.status: configure
+	./config.status --recheck
