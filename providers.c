@@ -53,21 +53,9 @@
  */
 
 #include "apr_pools.h"
-#include "apr_hash.h"
 #include "apr_strings.h"
 #include "ap_provider.h"
 #include "mod_ftp.h"
-
-#define FTP_PROVIDER_GROUP "ftp"
-
-FTP_DECLARE(void) ftp_register_provider(apr_pool_t *p,
-                                        const ftp_provider *provider)
-{
-	char lname[64];
-	apr_cpystrn(lname,provider->name,64);
-	ap_str_tolower(lname);
-    ap_register_provider(p, FTP_PROVIDER_GROUP, lname, "0", provider);
-}
 
 const ftp_provider * ftp_lookup_provider(const char *name)
 {

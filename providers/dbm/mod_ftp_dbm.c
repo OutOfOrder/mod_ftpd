@@ -59,6 +59,7 @@
 #include "apr_strings.h"
 #include "apr_dbm.h"
 #include "http_log.h"
+#include "ap_provider.h"
 
 #include "mod_ftp.h"
 
@@ -163,16 +164,14 @@ static ftp_chroot_status_t ftp_dbm_map_chroot(const request_rec *r,
 /* Module initialization structures */
 static const ftp_hooks_chroot ftp_hooks_chroot_dbm =
 {
-	ftp_dbm_map_chroot,		/* map_chroot */
-	NULL		/* ctx */
+	ftp_dbm_map_chroot		/* map_chroot */
 };
 
 static const ftp_provider ftp_dbm_provider =
 {
 	"DBM",		/* name */
 	&ftp_hooks_chroot_dbm,		/* chroot */
-	NULL,		/* listing */
-	NULL		/* ctx */
+	NULL		/* listing */
 };
 
 static const command_rec ftp_dbm_cmds[] = {
@@ -185,7 +184,8 @@ static const command_rec ftp_dbm_cmds[] = {
 
 static void register_hooks(apr_pool_t *p)
 {
-	ftp_register_provider(p, &ftp_dbm_provider);
+	ap_register_provider(p, FTP_PROVIDER_GROUP, ftp_dbm_provider.name, "0",
+		&ftp_dbm_provider);
 }
 
 module AP_MODULE_DECLARE_DATA ftp_dbm_module = {

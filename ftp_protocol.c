@@ -388,7 +388,10 @@ HANDLER_DECLARE(passwd)
 					ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 						"Chroot set to %s", chroot);
 					break; /* We got one fall out */
-				} else {
+				} else if (chroot_ret == FTP_CHROOT_FAIL) {
+					ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+						"User denied access to server");
+				} else { /* FTP_CHROOT_USER_NOT_FOUND*/
 					ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 						"User not found in chroot provider. Continuing");
 					continue;  /* User not found check next provider */

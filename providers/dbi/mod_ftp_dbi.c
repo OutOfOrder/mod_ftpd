@@ -66,6 +66,7 @@
 #include "apr_hash.h"
 
 #include "http_log.h"
+#include "ap_provider.h"
 
 #include "mod_ftp.h"
 
@@ -254,7 +255,7 @@ static apr_status_t safe_dbi_kill_conn(void *resource, void *params,
     return APR_SUCCESS;
 }
 
-ftp_dbi_config *create_new_conf(conn_id conn_id, apr_pool_t * p)
+static ftp_dbi_config *create_new_conf(conn_id conn_id, apr_pool_t * p)
 {
     ftp_dbi_config *conf;
     conf = (ftp_dbi_config *) apr_pcalloc(p, sizeof(ftp_dbi_config));
@@ -314,7 +315,7 @@ static apr_status_t get_or_create_dbi_conf(const char *conn_id,
 #define EMPTY_VAR ""            /* do NOT set this to NULL! */
 
 /* with a little help from ap_resolve_env() ;) */
-const char *populate_querystring(const request_rec * r,
+static const char *populate_querystring(const request_rec * r,
                                  const char *querystring,
                                  ftp_dbi_config * conf,
                                  ftp_dbi_dconfig * dconf,
@@ -424,7 +425,7 @@ const char *populate_querystring(const request_rec * r,
 }
 
 
-conn_id encap_conn_id(cmd_parms * cmd, const char *conn_id)
+static conn_id encap_conn_id(cmd_parms * cmd, const char *conn_id)
 {
     /* this will be used to allow configuration in htaccess */
     return conn_id;
@@ -642,7 +643,7 @@ static int safe_dbi_query(ftp_dbi_rest * mydbi_res, dbi_result * res,
     return error;
 }
 
-ftp_chroot_status_t ftp_dbi_map_chroot(const request_rec *r,
+static ftp_chroot_status_t ftp_dbi_map_chroot(const request_rec *r,
                                           const char **ret_chroot,
                                           const char **ret_initroot)
 {
@@ -734,15 +735,13 @@ ftp_chroot_status_t ftp_dbi_map_chroot(const request_rec *r,
 
 /* Module initialization structures */
 static const ftp_hooks_chroot ftp_hooks_chroot_dbi = {
-    ftp_dbi_map_chroot,         /* map_chroot */
-    NULL                        /* ctx */
+    ftp_dbi_map_chroot         /* map_chroot */
 };
 
 static const ftp_provider ftp_dbi_provider = {
-    "DBI",                      /* name */
+	"DBI",						/* name */
     &ftp_hooks_chroot_dbi,      /* chroot */
-    NULL,                       /* listing */
-    NULL                        /* ctx */
+    NULL                       /* listing */
 };
 
 
@@ -860,7 +859,8 @@ static void register_hooks(apr_pool_t * p)
 {
     ap_hook_pre_config(init_ftp_dbi_config, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_post_config(init_ftp_dbi, NULL, NULL, APR_HOOK_MIDDLE);
-    ftp_register_provider(p, &ftp_dbi_provider);
+	ap_register_provider(p, FTP_PROVIDER_GROUP, ftp_dbi_provider.name, "0",
+		&ftp_dbi_provider);
 }
 
 module AP_MODULE_DECLARE_DATA ftp_dbi_module = {

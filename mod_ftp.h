@@ -65,7 +65,7 @@ extern "C" {
 
 /* Current version of the Plugin interface */
 
-#define FTP_PLUGIN_VERSION 20031126
+#define FTP_PLUGIN_VERSION 20031215
 
 /* Create a set of FTP_DECLARE(type), FTP_DECLARE_NONSTD(type) and 
  * FTP_DECLARE_DATA with appropriate export and import tags for the platform
@@ -183,23 +183,18 @@ typedef struct ftp_hooks_listing ftp_hooks_listing;
  * This structure defines all of the hooks that an FTP plugin can provide.
  *
  */
+#define FTP_PROVIDER_GROUP "ftp"
 
 typedef struct {
 	const char *name;
 	const ftp_hooks_chroot *chroot;
 	const ftp_hooks_listing *listing;
-
-	void *ctx;
 } ftp_provider;
 
-/*const ftp_hooks_chroot *ftp_get_chroot_hooks(request_rec *r);
-const ftp_hooks_listing *ftp_get_listing_hooks(request_rec *r);
-*/
-
-FTP_DECLARE(void) ftp_register_provider(apr_pool_t *p,
+/*FTP_DECLARE(void) ftp_register_provider(apr_pool_t *p,
 										const ftp_provider *hooks);
 
-const ftp_provider *ftp_lookup_provider(const char *name);
+const ftp_provider *ftp_lookup_provider(const char *name);*/
 
 /* chroot hooks */
 typedef enum {
@@ -216,8 +211,6 @@ struct ftp_hooks_chroot {
 		const char **chroot,
 		const char **initroot
 	);
-
-	void *ctx;
 };
 
 /* chroot hooks */
@@ -227,8 +220,6 @@ struct ftp_hooks_listing {
 	char * (*get_entry)(
 		const char *name
 	);
-
-	void *ctx;
 };
 
 #ifdef __cplusplus

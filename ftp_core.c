@@ -83,6 +83,7 @@
 #include "apr_strings.h"
 #include "util_filter.h"
 #include "scoreboard.h"
+#include "ap_provider.h"
 
 #include "ftp.h"
 
@@ -315,7 +316,7 @@ static const char *ftp_set_chroot_order(cmd_parms *cmd,
 	}
 
 	addme = apr_array_push(pConfig->aChrootOrder);
-	lookup = ftp_lookup_provider(arg);
+	lookup = ap_lookup_provider(FTP_PROVIDER_GROUP, arg, "0");
 	if (!lookup) {
 		return apr_psprintf(cmd->pool, "Chroot Provider '%s' not loaded", arg);
 	}

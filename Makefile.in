@@ -3,7 +3,6 @@
 # Modify these top variables.
 SUBDIRS = 
 SOURCES = \
-	providers.c \
 	ftp_core.c \
 	ftp_protocol.c
 
