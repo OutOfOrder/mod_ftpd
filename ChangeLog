@@ -1,6 +1,7 @@
 0.11.0: 2004-01-03
 	Fixed a major buffer overflow issue in the main program loop.
 	update the list routing to use dynamic memory to prevent a possible overflow issue with long filenames.
+	changed --with-apache to --with-apxs
 
 0.10.0: 2003-12-30
 	Fixed a bug where cwd wouldn't change to a directory with spaces.

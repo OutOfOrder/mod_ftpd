@@ -8,13 +8,13 @@ AC_CONFIG_SRCDIR(ftp_core.c)
 dnl Add a test for a compiler.
 AC_PROG_CC
 
-AC_ARG_ENABLE(dbm_provider, [  --disable-dbm-provider  Do not compile the dbm provider],
+AC_ARG_ENABLE(dbm_provider, [AC_HELP_STRING([--disable-dbm-provider],[Do not compile the dbm provider])],
 		, enable_dbm_provider=yes)
-AC_ARG_ENABLE(default_provider, [  --disable-default-provider  Do not compile the default provider],
+AC_ARG_ENABLE(default_provider, [AC_HELP_STRING([--disable-default-provider],[Do not compile the default provider])],
 		, enable_default_provider=yes)
-AC_ARG_ENABLE(fail_provider, [  --disable-fail-provider  Do not compile the fail provider],
+AC_ARG_ENABLE(fail_provider, [AC_HELP_STRING([--disable-fail-provider],[Do not compile the fail provider])],,
 		, enable_fail_provider=yes)
-AC_ARG_ENABLE(dbi_provider, [  --enable-dbi-provider  Ccompile the dbi provider],
+AC_ARG_ENABLE(dbi_provider, [AC_HELP_STRING([--enable-dbi-provider],[Compile the dbi provider])],
 		enable_dbi_provider=yes, )
 
 APACHE_VERSION=2.0.44
