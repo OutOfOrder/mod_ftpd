@@ -20,6 +20,11 @@
     </copyright>
     <revhistory>
       <revision>
+        <revnumber>0.4</revnumber>
+        <date>2005-01-30</date>
+        <revremark>Added documentation about FtpAllowOverwrite</revremark>
+      </revision>
+      <revision>
         <revnumber>0.3</revnumber>
         <date>2004-02-09</date>
         <revremark>Added DBI documentation provided by Paul Querna</revremark>
@@ -123,6 +128,7 @@ Listen 21
                 &lt;LimitExcept LIST PUT MKCOL CHDIR&gt;
                         deny from all
                 &lt;/LimitExcept&gt;
+                FtpAllowOverWrite Off
         &lt;/Location&gt;
 &lt;/VirtualHost&gt;</programlisting>
     </example>
@@ -196,6 +202,12 @@ Listen 21
           <term>FtpServerAnnounce</term>
           <listitem>
             <para>Setting this to Off will prevent the mod_ftpd/VERSION tag from being added to the server header in Apache HTTP requests. This does not change the initial server response when a client connects via FTP to the server. The default value is On.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpAllowOverwrite</term>
+          <listitem>
+            <para>Setting this to On will prevent an ftp client from overwriting an existing file. In order for the file to be replaced, it must be deleted from the server first (DELETE method rights). This is good for an upload only directory where you do not want users overwriting existing files. The default value is On.</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -415,7 +427,7 @@ Listen 21
         <para>This module has been build using <application>Apache</application> 2.0.48. I have had people test it on 2.0.47 and 2.1 CVS HEAD.. But I have not officially tested it on 2.1 yet. When an official release of 2.1 is out, then I will test and modify my module for this branch of <application>Apache</application>.</para>
       </listitem>
       <listitem>
-        <para>Transfered files do NOT currently go through apache filters and bucket brigades.. When I figure them out, I will support that feature.. (dynamic FTP content..)</para>
+        <para>Transferred files do NOT currently go through apache filters and bucket brigades.. When I figure them out, I will support that feature.. (dynamic FTP content..)</para>
       </listitem>
       <listitem>
         <para>I have not load tested this at all.. So I do not know how well it will stand up to stress testing. Can some people run dkftpbench on this thing?</para>

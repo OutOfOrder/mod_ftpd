@@ -1,9 +1,10 @@
-?: ?
+0.13.0: 2005-01-30
 	updated license to ASL 2.0
 	fixd FreeBSD global lock creation issue (Reported by Paul Querna)
 	core module compiles under Win32
 	applied patches by Günter Knauf to get compilation working on Netware.
 	fixed per-dir configuration settings.
+	update m4 scripts for better detection of apache
 
 0.12.3: 2004-03-06
 	moved shared mem creation code to child_init instead of post_config to fix
