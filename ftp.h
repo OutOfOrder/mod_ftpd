@@ -73,8 +73,9 @@ module AP_MODULE_DECLARE_DATA ftp_module;
 typedef struct {
     int bEnabled; /* Is FTP Enabled? */
 	char* sFtpRoot; /* The FTP document root */
-	int pasv_minport; /* Minimum PASV port to use */
-	int pasv_maxport; /* Maximum PASV port to use */
+	int nMinPort; /* Minimum PASV port to use */
+	int nMaxPort; /* Maximum PASV port to use */
+	int bRealPerms; /* Show real permissionts in file listing */
 } ftp_config_rec;
 
 apr_hash_t *ap_ftp_hash;
@@ -108,10 +109,12 @@ typedef struct ftp_user_rec {
     char *user;
     char *passwd;
     char *auth_string;
+
 	char *current_directory;
+	int binaryflag;
+	apr_socket_t *passive_socket;
 
     ftp_state state;
-	apr_socket_t *passive_socket;
 
 /*    apr_file_t *fp;
     apr_mmap_t *mm;*/
@@ -138,6 +141,8 @@ int ap_ftp_handle_syst(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_NOOP(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_pasv(request_rec *r, char *buffer, void *data);
 int ap_ftp_handle_list(request_rec *r, char *buffer, void *data);
+int ap_ftp_handle_type(request_rec *r, char *buffer, void *data);
+int ap_ftp_handle_retr(request_rec *r, char *buffer, void *data);
 
 #ifdef __cplusplus
 }

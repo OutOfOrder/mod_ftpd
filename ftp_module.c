@@ -120,8 +120,9 @@ static void *create_ftp_server_config(apr_pool_t *p, server_rec *s)
     pConfig->bEnabled = 0;
 	/* Should just use DocumentRoot */
 	pConfig->sFtpRoot = DOCUMENT_LOCATION;  /* Probably a BAD default */
-	pConfig->pasv_minport = 1024;
-	pConfig->pasv_maxport = 65535;
+	pConfig->nMinPort = 1024;
+	pConfig->nMaxPort = 65535;
+	pConfig->bRealPerms = 0;
     return pConfig;
 }
 
@@ -180,6 +181,8 @@ static int process_ftp_connection(conn_rec *c)
     ur->c = c;
     ur->state = FTP_AUTH;
 	ur->passive_socket = NULL;
+	ur->binaryflag = 0;
+
     bb = apr_brigade_create(ur->p, c->bucket_alloc);
 
     r = ftp_create_request(ur);
@@ -218,6 +221,8 @@ void ap_ftp_str_toupper(char *str)
 		++str;
 	}
 }
+/* Response code printing function */
+//void ftp_send_response(int code, char *message, );
 
 static void register_hooks(apr_pool_t *p)
 {
@@ -257,7 +262,11 @@ static void register_hooks(apr_pool_t *p)
 		"(Returns Current Directory)", NULL, p);
 	ap_ftp_register_handler("MKD", NULL, FTP_NOT_IMPLEMENTED,
 		"<sp> directory-name", NULL, p);
+	ap_ftp_register_handler("XMKD", NULL, FTP_NOT_IMPLEMENTED,
+		"<sp> directory-name", NULL, p);
 	ap_ftp_register_handler("RMD", NULL, FTP_NOT_IMPLEMENTED,
+		"<sp> directory-name", NULL, p);
+	ap_ftp_register_handler("XRMD", NULL, FTP_NOT_IMPLEMENTED,
 		"<sp> directory-name", NULL, p);
 	ap_ftp_register_handler("SIZE", NULL, FTP_NOT_IMPLEMENTED,
 		"<sp> path-name", NULL, p);
@@ -269,7 +278,8 @@ static void register_hooks(apr_pool_t *p)
 		"(Specify Transfer Mode)", NULL, p);
 	ap_ftp_register_handler("PASV", ap_ftp_handle_pasv, FTP_TRANSACTION, 
 		"(Set Server into Passive Mode)", NULL, p);
-	ap_ftp_register_handler("TYPE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ap_ftp_register_handler("TYPE", ap_ftp_handle_type, FTP_TRANSACTION, 
+		"<sp> [ A | E | I | L ]", NULL, p);
 	ap_ftp_register_handler("SITE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 
 /* Directory Listing */
@@ -281,7 +291,8 @@ static void register_hooks(apr_pool_t *p)
 	ap_ftp_register_handler("RNFR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ap_ftp_register_handler("RNTO", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 /* File Transfer */
-	ap_ftp_register_handler("RETR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
+	ap_ftp_register_handler("RETR", ap_ftp_handle_retr, FTP_TRANS_PASV, 
+		"<sp> file-name", NULL, p);
 	ap_ftp_register_handler("STOR", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ap_ftp_register_handler("APPE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
 	ap_ftp_register_handler("DELE", NULL, FTP_NOT_IMPLEMENTED, NULL, NULL, p);
@@ -312,13 +323,16 @@ static void register_hooks(apr_pool_t *p)
 static const command_rec ftp_cmds[] = {
     AP_INIT_FLAG("FTPProtocol", set_ftp_protocol, NULL, RSRC_CONF,
                  "Whether this server is serving the FTP0 protocol"),
+	AP_INIT_FLAG("FTPShowRealPermissions", ap_set_flag_slot,
+				(void *)APR_OFFSETOF(ftp_config_rec, bRealPerms), RSRC_CONF,
+                 "Show Real Permissions on files.\nDefault: Off"),
 	AP_INIT_TAKE1("FTPDocumentRoot", set_ftp_docroot, NULL, RSRC_CONF,
 				 "Root of this FTP server\nDefault: The Server DocumentRoot"),
 	AP_INIT_TAKE1("FTPPasvMinPort", ap_set_int_slot, 
-				(void *)APR_OFFSETOF(ftp_config_rec, pasv_minport), RSRC_CONF,
+				(void *)APR_OFFSETOF(ftp_config_rec, nMinPort), RSRC_CONF,
 				"Minimum PASV port to use for Data connections\nDefault: 1024"),
 	AP_INIT_TAKE1("FTPPasvMinPort", ap_set_int_slot, 
-				(void *)APR_OFFSETOF(ftp_config_rec, pasv_minport), RSRC_CONF,
+				(void *)APR_OFFSETOF(ftp_config_rec, nMaxPort), RSRC_CONF,
 				"Minimum PASV port to use for Data connections\nDefault: 65535"),
     { NULL }
 };
