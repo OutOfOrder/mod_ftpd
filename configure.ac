@@ -1,5 +1,5 @@
 dnl Required initializer
-AC_INIT(mod_ftpd, 0.12.2)
+AC_INIT(mod_ftpd, 0.12.3)
 AC_PREREQ(2.53)
 AC_CONFIG_HEADERS(config.h)
 

@@ -1,3 +1,8 @@
+?:?
+	moved shared mem creation code to child_init instead of post_config to fix
+		segfault on startup if apache quit uncleanly.
+	updated/fixed Makefile DIST
+
 0.12.2: 2004-01-22
 	made sure I set r->user before calling the chroot hook
 	fixed double incrememt bug in chroot hook

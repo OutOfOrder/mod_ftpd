@@ -54,7 +54,7 @@
  */
 
 
-/* $Header: /home/cvs/httpd-ftp/providers/default/mod_ftpd_default.c,v 1.3 2004/01/09 07:25:38 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/providers/default/mod_ftpd_default.c,v 1.4 2004/03/05 04:09:06 urkle Exp $ */
 #include "httpd.h"
 #include "http_config.h"
 #include "apr_strings.h"
@@ -80,6 +80,7 @@ static apr_shm_t *ftpd_counter_shm;
 static ftpd_default_counter_rec *ftpd_counter;
 static char *ftpd_global_mutex_file;
 static apr_global_mutex_t *ftpd_global_mutex;
+static int server_count;
 
 #define MOD_FTPD_DEFAULT_SHMEM_CACHE "/tmp/mod_ftpd_default"
 
@@ -115,7 +116,7 @@ static int ftpd_default_post_conf(apr_pool_t *p, apr_pool_t *log, apr_pool_t *te
 								server_rec *s)
 {
 	apr_status_t rv;
-	int server_count = 0;
+	/*int server_count = 0;*/
 	server_rec *cur_s;
 	void *data = NULL;
 	const char *userdata_key = "ftpd_default_post_config";
@@ -140,20 +141,30 @@ static int ftpd_default_post_conf(apr_pool_t *p, apr_pool_t *log, apr_pool_t *te
 	for (cur_s = s; cur_s; cur_s = cur_s->next) {
 		ftpd_default_server_conf *pConfig = ap_get_module_config(
 						cur_s->module_config, &ftpd_default_module);
-		if (pConfig) {
-			ap_log_perror(APLOG_MARK, APLOG_STARTUP, 0, log,
-				"config->maxlogins: %d", pConfig->maxlogins);
-			pConfig->server_offset = server_count;
-			server_count++;
-		}
+		pConfig->server_offset = server_count;
+		server_count++;
 	}
 
-	rv = apr_shm_create(&ftpd_counter_shm, sizeof(ftpd_default_counter_rec)*server_count,
+	/*rv = apr_shm_create(&ftpd_counter_shm, sizeof(ftpd_default_counter_rec)*server_count,
 			MOD_FTPD_DEFAULT_SHMEM_CACHE, p);
+	if (rv == APR_EEXIST) {
+		ap_log_perror(APLOG_MARK, APLOG_STARTUP, 0, log,
+			"[mod_ftpd_default.c] - shm already exists: reconnecting: %d", rv);
+		rv = apr_shm_attach(&ftpd_counter_shm, MOD_FTPD_DEFAULT_SHMEM_CACHE, p);
+		if (rv == APR_SUCCESS) {
+			rv = apr_shm_destroy(ftpd_counter_shm);
+			ap_log_perror(APLOG_MARK, APLOG_STARTUP, 0, log,
+				"[mod_ftpd_default.c] - shm connected: destroed: %d", rv);
+		}
+		rv = apr_shm_create(&ftpd_counter_shm, sizeof(ftpd_default_counter_rec)*server_count,
+			MOD_FTPD_DEFAULT_SHMEM_CACHE, p);
+	}
+	if (rv != APR_SUCCESS) {
+		return rv;
+	}
 	ap_log_perror(APLOG_MARK, APLOG_STARTUP, 0, log,
-		"shm return value: %d", rv);
-
-	apr_pool_cleanup_register(p, NULL, ftpd_cleanup_shm, apr_pool_cleanup_null);
+		"[mod_ftpd_default.c] - shm created: %d", rv);
+	apr_pool_cleanup_register(p, NULL, ftpd_cleanup_shm, apr_pool_cleanup_null);*/
 	return OK;
 }
 
@@ -162,9 +173,24 @@ static void ftpd_default_init_child(apr_pool_t *pchild, server_rec *s)
 	apr_status_t rv;
 	rv = apr_global_mutex_child_init(&ftpd_global_mutex,
 			ftpd_global_mutex_file, pchild);
-	rv = apr_shm_attach(&ftpd_counter_shm,
+	if (rv != APR_SUCCESS) {
+		ap_log_error(APLOG_MARK, APLOG_ERR, 0, s,
+			"Error attaching to global mutex: %d", rv);
+		return;
+	}
+	rv = apr_shm_create(&ftpd_counter_shm, sizeof(ftpd_default_counter_rec)*server_count,
 			MOD_FTPD_DEFAULT_SHMEM_CACHE, pchild);
-
+	if (rv == APR_EEXIST) {
+		ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s,
+			"shm already exists: reconnecting: %d", rv);
+		rv = apr_shm_attach(&ftpd_counter_shm, MOD_FTPD_DEFAULT_SHMEM_CACHE, pchild);
+	}
+	if (rv != APR_SUCCESS) {
+		ap_log_error(APLOG_MARK, APLOG_ERR, 0, s,
+			"Error attaching to shared memory: %d", rv);
+		return;
+	}
+	apr_pool_cleanup_register(pchild, NULL, ftpd_cleanup_shm, apr_pool_cleanup_null);
 	ftpd_counter = apr_shm_baseaddr_get(ftpd_counter_shm);
 }
 

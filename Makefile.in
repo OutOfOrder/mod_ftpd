@@ -93,29 +93,38 @@ distclean: clean distclean-subdirs
 		configure stamp-h stamp-h.in Makefile aclocal.m4
 	$(RM) -r autom4te-2.53.cache .libs
 
-DESTDIR = @PACKAGE_NAME@-@PACKAGE_VERSION@
-DESTTGZ = $(DESTDIR).tar.gz
-dist:
-	@rm -rf $(DESTDIR); \
-	list=' $(PROVIDERS_SUBDIRS) $(SUBDIRS)'; \
+DISTDIR = @PACKAGE_NAME@-@PACKAGE_VERSION@
+DESTDIR = $(builddir)/@PACKAGE_NAME@-@PACKAGE_VERSION@
+DISTTBZ = $(DISTDIR).tar.bz2
+DISTTGZ = $(DISTDIR).tar.gz
+
+dist-subdirs:
+	@list=' $(PROVIDERS_SUBDIRS) $(SUBDIRS)'; \
 	for i in $$list; do \
 		if test -d "$$i"; then \
-			target=local-dist; \
+			target=dist-subdirs; \
 			echo "Making $$target in $$i"; \
 			if test "$$i" = "."; then \
 				made_local=yes; \
 				target="local-dist"; \
 			fi; \
-			NEWDESTDIR=$(builddir)/$(DESTDIR)/$$i; \
-			echo $(NEWDESTDIR); \
-			(cd $$i && $(MAKE) DESTDIR=$(builddir)/$(DESTDIR)/$$i $$target) || exit 1; \
+			(cd $$i && $(MAKE) DESTDIR=$(DESTDIR)/$$i $$target) || exit 1; \
 		fi; \
 	done; \
 	if test "$$made_local" != "yes"; then \
 		$(MAKE) "local-dist" || exit 1; \
+	fi;
+
+dist dist-bz2 dist-gz:
+	@oformat=`echo $@|sed s/dist-//`; \
+	rm -rf $(DISTDIR); \
+	$(MAKE) dist-subdirs || exit 1; \
+	if test "$$oformat" != "gz"; then \
+		tar -cjf $(DISTTBZ) $(DISTDIR); \
+	else \
+		tar -czf $(DISTTGZ) $(DISTDIR); \
 	fi; \
-	tar -zcf $(DESTTGZ) $(DESTDIR); \
-	rm -rf $(DESTDIR);
+	rm -rf $(DISTDIR);
 
 local-dist: $(DISTFILES)
 	@mkdir -p $(DESTDIR); \
@@ -131,7 +140,7 @@ depend: $(SOURCES) $(HEADERS)
 include $(builddir)/.deps
 
 .PHONY: include all-subdirs activate-subdirs install-subdirs \
-	clean-subdirs distclean-subdirs dist
+	clean-subdirs distclean-subdirs dist dist-gz dist-bz2 dist-subdirs
 
 # Regenerate makefiles
 # autoheader might not change config.h.in, so touch a stamp file.

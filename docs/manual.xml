@@ -18,6 +18,11 @@
     </copyright>
     <revhistory>
       <revision>
+        <revnumber>0.3</revnumber>
+        <date>2004-02-09</date>
+        <revremark>Added DBI documentation provided by Paul Querna</revremark>
+      </revision>
+      <revision>
         <revnumber>0.2</revnumber>
         <date>2004-01-08</date>
         <revremark>Updated to reflect changes on mod_ftpd 0.12.0</revremark>
@@ -300,7 +305,104 @@ Listen 21
     <sect2 id="mod_dbi">
       <title>FTP DBI provider</title>
       <para>LoadModule ftpd_dbi_module modules/mod_ftpd_dbi.so</para>
-      <para>Documentation to be written.</para>
+      <variablelist>
+        <varlistentry>
+          <term>FtpDbiDriver</term>
+          <listitem>
+            <para>Database Driver to use from libdbi</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiDriverDir</term>
+          <listitem>
+            <para>Directory containing the libdbi database drivers. The default value is from set at compile time</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiHost</term>
+          <listitem>
+            <para>Hostname of the Database Server to connect to</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiUsername</term>
+          <listitem>
+            <para>The username for the database connection</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiPassword</term>
+          <listitem>
+            <para>The password for the database connection</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiName</term>
+          <listitem>
+            <para>The name of the database containing the tables</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiTable</term>
+          <listitem>
+            <para>The name of the table containing the usernames and password hashes</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiUsernameField</term>
+          <listitem>
+            <para>The table field that contains the username</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiChrootField</term>
+          <listitem>
+            <para>The table field that contains the password</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiChrootQuery</term>
+          <listitem>
+            <para>The SQL query to pick the chroot value from</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiIsActiveField</term>
+          <listitem>
+            <para>The table field that contains the active account flag</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiConnMin</term>
+          <listitem>
+            <para>The Minimum Number of Database Connections</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiConnSoftMax</term>
+          <listitem>
+            <para>The Soft Maximum Number of Database Connections</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiConnHardMax</term>
+          <listitem>
+            <para>The Hard Maximum Number of Database Connections</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiConnTTL</term>
+          <listitem>
+            <para>The Database Pool Time To Live for Each Connection</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpDbiServerConfig</term>
+          <listitem>
+            <para>The name of the configuration to use for this section</para>
+          </listitem>
+        </varlistentry>
+      </variablelist>
     </sect2>
   </sect1>
   <sect1 id="issues">

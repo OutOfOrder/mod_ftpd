@@ -67,22 +67,27 @@ distclean: clean
 
 DESTDIR = @PACKAGE_NAME@-@PACKAGE_VERSION@
 DESTTGZ = $(DESTDIR).tar.gz
-dist:
-	@rm -rf $(DESTDIR); \
-	list=' $(PROVIDERS_SUBDIRS) $(SUBDIRS)'; \
+
+dist-subdirs:
+	@list=' $(SUBDIRS)'; \
 	for i in $$list; do \
 		if test -d "$$i"; then \
-			target=dist; \
+			target=dist-subdirs; \
 			echo "Making $$target in $$i"; \
 			if test "$$i" = "."; then \
 				made_local=yes; \
 				target="local-dist"; \
 			fi; \
-			NEWDESTDIR=$(builddir)/$(DESTDIR)/$$i; \
-			echo $(NEWDESTDIR); \
-			(cd $$i && $(MAKE) DESTDIR=$(builddir)/$(DESTDIR)/$$i $$target) || exit 1; \
+			(cd $$i && $(MAKE) DESTDIR=$(DESTDIR)/$$i $$target) || exit 1; \
 		fi; \
 	done; \
+	if test "$$made_local" != "yes"; then \
+		$(MAKE) "local-dist" || exit 1; \
+	fi;
+
+dist:
+	@rm -rf $(DESTDIR); \
+	$(MAKE) dist-subdirs || exit 1;
 	tar -zcf $(DESTTGZ) $(DESTDIR); \
 	rm -rf $(DESTDIR);
 
@@ -92,7 +97,8 @@ local-dist: $(DISTFILES)
 
 include $(builddir)/.deps
 
-.PHONY:
+.PHONY: include all-subdirs activate-subdirs install-subdirs \
+	clean-subdirs distclean-subdirs dist dist-gz dist-bz2 dist-subdirs
 
 # Regenerate makefiles
 # autoheader might not change config.h.in, so touch a stamp file.
