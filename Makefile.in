@@ -48,7 +48,7 @@ DISTFILES = $(STD_DIST) $(EXTRA_DIST) $(SOURCES) $(HEADERS)
 
 all: $(TARGET) all-subdirs
 
-all-subdirs install-subdirs update-subdirs clean-subdirs distclean-subdirs:
+all-subdirs install-subdirs activate-subdirs clean-subdirs distclean-subdirs:
 	@otarget=`echo $@|sed s/-subdirs//`; \
 	list=' $(PROVIDERS_SUBDIRS) $(SUBDIRS)'; \
 	for i in $$list; do \
@@ -69,16 +69,20 @@ TODO: TODO_HEADER $(SOURCES) $(HEADERS)
 $(TARGET):
 	@@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(INCLUDES) $(CFLAGS) $(LDADD) @DEFS@ $(SOURCES) 
 
-install: install-subdirs
+install: $(TARGET) install-subdirs
 	@@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) $(TARGET); \
 	echo "**********************************************************************"; \
 	echo "*** mod_ftpd modules have been installed."; \
 	echo "*** Please edit your Apache configuration files and"; \
 	echo "*** add the appropriate LoadModule directives per the documentation"; \
 	echo "*** in docs/mod_ftpd.html"; \
+	echo "*** If you have previously used a pre 0.12.0 release the module names"; \
+	echo "*** have changed from mod_ftp* to mod_ftpd* And several configuration"; \
+	echo "*** directives have changed their names."; \
+	echo "*** Please remove the old modules and update your configuration."; \
 	echo "**********************************************************************";
 
-update: update-subdirs
+activate: $(TARGET) activate-subdirs
 	@APXS_BIN@ -i -n $(subst mod_,,@PACKAGE_NAME@) $(TARGET)
 
 clean: clean-subdirs
@@ -121,12 +125,12 @@ $(builddir)/.deps: depend
 
 depend: $(SOURCES) $(HEADERS)
 	@if test -n "`ls $(srcdir)/*.c 2> /dev/null`"; then \
-		$(CC) -MM -MT $(TARGET) -I@APACHE_INCDIR@ $(srcdir)/*.c > $(builddir)/.deps || true; \
+		$(CC) -MM -MT $(TARGET) -I@APACHE_INCDIR@ @DEFS@ $(srcdir)/*.c > $(builddir)/.deps || true; \
 	fi
 
 include $(builddir)/.deps
 
-.PHONY: include all-subdirs update-subdirs install-subdirs \
+.PHONY: include all-subdirs activate-subdirs install-subdirs \
 	clean-subdirs distclean-subdirs dist
 
 # Regenerate makefiles

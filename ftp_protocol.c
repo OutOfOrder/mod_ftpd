@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.35 2004/01/22 20:03:41 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/ftp_protocol.c,v 1.36 2004/01/22 20:47:07 urkle Exp $ */
 #define CORE_PRIVATE
 #include "httpd.h"
 #include "http_protocol.h"
@@ -170,7 +170,6 @@ static ftpd_chroot_status_t ftpd_call_chroot(ftpd_svr_config_rec *pConfig, reque
 					"User not found in chroot provider. Continuing");
 			}
 		}
-		current_provider = current_provider->next;
 	}
 	return FTPD_CHROOT_USER_NOT_FOUND;
 }
@@ -501,6 +500,8 @@ HANDLER_DECLARE(passwd)
 					&ftpd_module);
 
 	/* Get chroot mapping */
+	
+	r->user = apr_pstrdup(r->pool, ur->user);
 	chroot_ret = ftpd_call_chroot(pConfig,r,&chroot,&initroot);
 	if (chroot_ret == FTPD_CHROOT_FAIL)
 		return FTPD_HANDLER_QUIT;
@@ -509,7 +510,6 @@ HANDLER_DECLARE(passwd)
                           ap_getword_white_nc(r->pool, &buffer));
     ur->auth_string = apr_psprintf(ur->p, "Basic %s",
                                    ap_pbase64encode(r->pool, passwd)); 
-	r->user = apr_pstrdup(r->pool, ur->user);
     apr_table_set(r->headers_in, "Authorization", ur->auth_string);
 
 	if (chroot) {

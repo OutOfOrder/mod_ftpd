@@ -1,4 +1,11 @@
-0.12.1: 2004-01-22
+0.12.2: 2004-01-22
+	made sure I set r->user before calling the chroot hook
+	fixed double incrememt bug in chroot hook
+	Added more notices at the end of make install
+	changed update to activate (for modifying apache configuration)
+	fixed some makefile dependencies with install.
+
+0.12.1: (never released)
 	minor update to add an "FTPAllowOverwrite" flag to allow STOR to overwrite
 		existing files.. (per directory configation option)
 		Which doesn't work.. (need to figure out why perdir configuration isn't
