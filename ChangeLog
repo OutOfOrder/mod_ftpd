@@ -1,8 +1,16 @@
+0.10.0: ?
+	Fixed a bug where cwd wouldn't change to a directory with spaces.
+	URI's are now URI escaped before being passed to the logger.
+	reworked handler return codes.
+	r->status is now updated based on the return code of the handler.
+	renamed state and flag constants.
+
 0.9.1: 2003-12-22
 	Fixed a tiny, but major bug where setting most of the configuration options
 	would corrupt the internal configuration structure. 
 	( the void * in the args is NOT the value passed in the command_rec,
 	it's cmd->info)
+
 0.9: 2003-12-16
 	Added default and fail providers
 	Redid provider registration.

@@ -53,7 +53,7 @@
  *
  */
 
-/* $Header: /home/cvs/httpd-ftp/Attic/mod_ftp.h,v 1.11 2003/12/22 06:12:13 urkle Exp $ */
+/* $Header: /home/cvs/httpd-ftp/Attic/mod_ftp.h,v 1.12 2003/12/31 02:26:24 urkle Exp $ */
 #ifndef _MOD_FTP_H_
 #define _MOD_FTP_H_
 
@@ -169,42 +169,50 @@ enum {
 };
 
 /* Handler return codes */
-#define FTP_QUIT                1
-#define FTP_USER_UNKNOWN        2
-#define FTP_USER_NOT_ALLOWED    3
-#define FTP_UPDATE_AUTH			4
-#define FTP_UPDATE_AGENT		5
+enum {
+	FTP_HANDLER_OK = 0,				/* Everthings OK */
+	FTP_HANDLER_QUIT,				/* Terminate the connection */
+	FTP_HANDLER_PERMDENY,			/* Permision was denied */
+	FTP_HANDLER_FILENOTFOUND,		/* File does not exist */
+	FTP_HANDLER_SERVERERROR,		/* Other server error */
+	FTP_HANDLER_USER_UNKNOWN,		/* User is unknown */
+	FTP_HANDLER_USER_NOT_ALLOWED,	/* User not allowed to login */
+	FTP_HANDLER_UPDATE_AUTH,		/* Update the global auth credentials */
+	FTP_HANDLER_UPDATE_AGENT,		/* Update the global UserAgent */
+	FTP_HANDLER_LAST
+};
 
 /* Current Data Pipe state */
 typedef enum {
-	FTP_PIPE_NONE,
+	FTP_PIPE_NONE = 0,
 	FTP_PIPE_PASV,
 	FTP_PIPE_PORT,
-	FTP_PIPE_OPEN
+	FTP_PIPE_OPEN,
+	FTP_PIPE_LAST
 } ftp_pipe_state;
 
-/* connection state */
+/* connection state and handler flags */
 typedef enum {
-	FTP_AUTH 			= 0x001, /* The initial connection state */
-	FTP_USER_ACK 		= 0x002, /* a username has been provided, password expected */
-	FTP_TRANS_NODATA 	= 0x004, /* standard transaction state */
-	FTP_TRANS_DATA 		= 0x008, /* a pasv or port or variant has been provided for file transfer */
-	FTP_TRANS_RENAME	= 0x010, /* a from name has been provided, a to name is expected */
-	FTP_EPSV_LOCK		= 0x020, /* Flag: which commands are locked in epsv all state */
-	FTP_NOT_IMPLEMENTED = 0x040, /* Flag: an unimplimented command */
-	FTP_FEATURE 		= 0x080, /* Flag: a Feature listed in FEAT */
-	FTP_HIDE_ARGS		= 0x100, /* Flag: hide arguments in logging */
-	FTP_LOG_COMMAND		= 0x200  /* Flag: log this command in the access log */
+	FTP_STATE_AUTH 				= 0x001, /* The initial connection state */
+	FTP_STATE_USER_ACK 			= 0x002, /* a username has been provided, password expected */
+	FTP_STATE_TRANS_NODATA 		= 0x004, /* standard transaction state */
+	FTP_STATE_TRANS_DATA 		= 0x008, /* a pasv or port or variant has been provided for file transfer */
+	FTP_STATE_RENAME			= 0x010, /* a from name has been provided, a to name is expected */
+	FTP_FLAG_EPSV_LOCK			= 0x020, /* Flag: which commands are locked in epsv all state */
+	FTP_FLAG_NOT_IMPLEMENTED 	= 0x040, /* Flag: an unimplimented command */
+	FTP_FLAG_FEATURE 			= 0x080, /* Flag: a Feature listed in FEAT */
+	FTP_FLAG_HIDE_ARGS			= 0x100, /* Flag: hide arguments in logging */
+	FTP_FLAG_LOG_COMMAND		= 0x200  /* Flag: log this command in the access log */
 } ftp_state;
 
 /* All States connection states */
-#define FTP_ALL_STATES FTP_AUTH | FTP_USER_ACK | FTP_TRANS_NODATA \
-	| FTP_TRANS_DATA | FTP_TRANS_RENAME
+#define FTP_ALL_STATES FTP_STATE_AUTH | FTP_STATE_USER_ACK | FTP_STATE_TRANS_NODATA \
+	| FTP_STATE_TRANS_DATA | FTP_STATE_RENAME
 /* All command Flags */
-#define FTP_ALL_FLAGS FTP_EPSV_LOCK | FTP_NOT_IMPLEMENTED | FTP_FEATURE \
-	| FTP_HIDE_ARGS | FTP_LOG_COMMAND
+#define FTP_ALL_FLAGS FTP_FLAG_EPSV_LOCK | FTP_FLAG_NOT_IMPLEMENTED | FTP_FLAG_FEATURE \
+	| FTP_FLAG_HIDE_ARGS | FTP_FLAG_LOG_COMMAND
 /* Transaction state is both DATA and NODATA */
-#define FTP_TRANSACTION (FTP_TRANS_NODATA | FTP_TRANS_DATA)
+#define FTP_STATE_TRANSACTION (FTP_STATE_TRANS_NODATA | FTP_STATE_TRANS_DATA)
 
 typedef struct ftp_datacon_rec {
 	apr_pool_t *p;
