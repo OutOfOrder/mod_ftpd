@@ -718,18 +718,30 @@ HANDLER_DECLARE(pasv)
 	/* Argument parsing */
 	if (data) { /* EPSV command */
 		family = apr_atoi64(buffer);
+		family = (family == 1) ? APR_INET : 
+#		if APR_HAVE_IPV6
+		(family == 2) ? APR_INET6 : 
+#		endif
+		0;
 		if (apr_strnatcasecmp(buffer,"ALL")==0) {
 			ur->epsv_lock = 1;
-		} else if ( (family==1 && local_addr->family!=1)
-				|| (family==2 && local_addr->family!=2)) {
-			ap_rprintf(r, FTP_C_INVALID_PROTO" not same protocol as connection, use (%d)\r\n",
-					local_addr->family);
-			ap_rflush(r);
-			return FTPD_HANDLER_SERVERERROR;
-		} else if (family!=0) {
-			ap_rprintf(r, FTP_C_INVALID_PROTO" Unsupported Protocol, use (1,2)\r\n");
-			ap_rflush(r);
-			return FTPD_HANDLER_SERVERERROR;
+		} else {
+			switch (family) {
+			case APR_INET:
+#		if APR_HAVE_IPV6
+			case APR_INET6:
+#		endif
+				if (family != local_addr->family) {
+					ap_rprintf(r, FTP_C_INVALID_PROTO" not same protocol as connection, use (%d)\r\n",
+						local_addr->family);
+					ap_rflush(r);
+				}
+				return FTPD_HANDLER_SERVERERROR;
+			default:
+				ap_rprintf(r, FTP_C_INVALID_PROTO" Unsupported Protocol, use (1,2)\r\n");
+				ap_rflush(r);
+				return FTPD_HANDLER_SERVERERROR;
+			}
 		}
 	}
 	family = local_addr->family;
@@ -747,7 +759,12 @@ HANDLER_DECLARE(pasv)
 		apr_generate_random_bytes((unsigned char *)&port,2);
 		port = ( (pConfig->nMaxPort - pConfig->nMinPort) * port) / 65535;
 		port += pConfig->nMinPort;
-		apr_sockaddr_info_get(&listen_addr,ipaddr, family, port, 0, ur->data.p);
+		if ((res = apr_sockaddr_info_get(&listen_addr,ipaddr, family, port, 0, ur->data.p))!=APR_SUCCESS) {
+			ap_rprintf(r, FTP_C_PASVFAIL" Unable to bind to address");
+			ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r, 
+				"Unable to set up local socket");
+			return FTPD_HANDLER_SERVERERROR;
+		}
 		//apr_sockaddr_port_set(listen_addr,port);
 		if ((res = apr_socket_bind(ur->data.pasv, listen_addr))==APR_SUCCESS) {
 			break;
