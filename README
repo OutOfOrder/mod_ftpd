@@ -71,6 +71,11 @@ FTPPasvMaxPort
 	Maximum PASV port to use for Data connections. The default value is 65535.
 	This value must be greater than FTPPasvMinPort.
 
+FTPChroot
+	This is the chroot provider order to use for determining what chroot dir the
+	user should be locked into. the providers are separate modules that must be
+	loaded after mod_ftp.so (mod_ftp_dbm is included);
+
 <Limit>
 	To limit what users can and cannot do in directories the Limit and 
 	LimitExcept must be used. Possible parameters for Limit are:

@@ -203,7 +203,8 @@ struct ftp_hooks_chroot {
 	/* Get the chroot directory for the specified user */
 	ftp_chroot_status_t (*map_chroot)(
 		const request_rec *r,
-		const char **chroot
+		const char **chroot,
+		const char **initroot
 	);
 
 	void *ctx;

@@ -184,9 +184,6 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 	request_rec *handler_r;
     ftp_user_rec *ur = ftp_get_user_rec(r);
 
-    //r->uri = apr_pstrdup(r->pool, "ftp:");
-
-    //ap_run_map_to_storage(r);
 	apr_pool_create(&handler_p, r->pool);
 
     while (1) {
@@ -196,7 +193,7 @@ int process_ftp_connection_internal(request_rec *r, apr_bucket_brigade *bb)
         {
             break;
         }
-		ap_log_rerror(APLOG_MARK, APLOG_NOTICE|APLOG_NOERRNO, 0, r,
+		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 				"C: %s",buffer);
         command = ap_getword_white_nc(r->pool, &buffer);
         ap_str_tolower(command);
@@ -278,9 +275,10 @@ HANDLER_DECLARE(user)
 HANDLER_DECLARE(passwd)
 {
 	char *passwd;
-	int itr __attribute__ ((unused));
+	int itr;
 	const ftp_provider *provider;
 	apr_status_t res;
+	const char *chroot = NULL,*initroot = NULL;
 	ftp_chroot_status_t chroot_ret;
 	ftp_user_rec *ur = ftp_get_user_rec(r);
 	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
@@ -293,7 +291,42 @@ HANDLER_DECLARE(passwd)
 	r->user = apr_pstrdup(r->pool, ur->user);
     apr_table_set(r->headers_in, "Authorization", ur->auth_string);
 
-	if ((res = ftp_check_acl("/", r))!=OK) {
+	/* Get chroot mapping */
+	if (!apr_is_empty_array(pConfig->aChrootOrder)) {
+		provider = (ftp_provider *)pConfig->aChrootOrder->elts;
+		for (itr = 0; itr < pConfig->aChrootOrder->nelts; itr++) {
+			if (provider[itr].chroot && provider[itr].chroot->map_chroot) {
+				chroot_ret = provider[itr].chroot->map_chroot(r, 
+						&chroot, &initroot);
+				if (chroot_ret == FTP_CHROOT_USER_FOUND) {
+					ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+						"Chroot set to %s", chroot);
+					break; /* We got one fall out */
+				} else {
+					ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+						"User not found, continuing");
+					continue;  /* User not found check next provider */
+				}
+			} else {
+				ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+					"Provider '%s' does not provider chroot mapping.",
+					provider->name);
+			}
+		}
+	}
+
+	if (chroot) {
+		ur->chroot = apr_pstrdup(ur->p, chroot);
+	} else {
+		ur->chroot = NULL;
+	}
+	if (initroot) {
+		ur->current_directory = apr_pstrdup(ur->p, initroot);
+	} else {
+		ur->current_directory = apr_pstrdup(ur->p,"/");		
+	}
+
+	if ((res = ftp_check_acl(ur->current_directory, r))!=OK) {
 		ap_rprintf(r, FTP_C_NOLOGIN" Login not allowed: %d\r\n", res);
 		/* Bail out immediatly if this occurs? */
 		return FTP_QUIT;
@@ -302,7 +335,7 @@ HANDLER_DECLARE(passwd)
     if ((res = ap_run_check_user_id(r)) != OK) {
         ap_rprintf(r, FTP_C_LOGINERR" Login incorrect\r\n");
         ap_rflush(r);
-        ap_log_rerror(APLOG_MARK, APLOG_ERR|APLOG_NOERRNO, 0, r,
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
                "Unauthorized user '%s' tried to log in:", ur->user);
         ur->state = FTP_AUTH;
         return FTP_USER_NOT_ALLOWED;
@@ -310,36 +343,14 @@ HANDLER_DECLARE(passwd)
 	if ((res = ap_run_auth_checker(r)) != OK) {
 		ap_rprintf(r, FTP_C_LOGINERR" Login denied\r\n");
 		ap_rflush(r);
-        ap_log_rerror(APLOG_MARK, APLOG_ERR|APLOG_NOERRNO, 0, r,
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
                "Unauthorized user '%s' tried to log in:", ur->user);
 		return FTP_USER_UNKNOWN;
 	}
-	/* Get chroot mapping */
-	if (!apr_is_empty_array(pConfig->aChrootOrder)) {
-		provider = (ftp_provider *)pConfig->aChrootOrder->elts;
-		for (itr = 0; itr < pConfig->aChrootOrder->nelts; itr++) {
-			if (provider[itr].chroot && provider[itr].chroot->map_chroot) {
-				chroot_ret = provider[itr].chroot->map_chroot(r, &ur->chroot);
-				if (chroot_ret == FTP_CHROOT_USER_FOUND) {
-					ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, r,
-						"Chroot set to %s", ur->chroot);
-					break; /* We got one fall out */
-				} else {
-					ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, r,
-						"User not found, continuing");
-					continue;  /* User not found check next provider */
-				}
-			} else {
-				ap_log_rerror(APLOG_MARK, APLOG_ERR|APLOG_NOERRNO, 0, r,
-					"Provider '%s' does not provider chroot mapping.",
-					provider->name);
-			}
-		}
-	}
+
 	/* Report succsessful login */
     ap_rprintf(r, FTP_C_LOGINOK" User %s logged in.\r\n", ur->user);
     ap_rflush(r);
-	ur->current_directory = apr_pstrdup(ur->p,"/");
 	ur->state = FTP_TRANS_NODATA;
 	return OK;
 }
@@ -786,7 +797,7 @@ HANDLER_DECLARE(retr)
 /* Check Restart */
 	if (ur->restart_position) {
 		apr_off_t offset = ur->restart_position;
-		ap_log_rerror(APLOG_MARK, APLOG_NOTICE | APLOG_NOERRNO, 0, r, 
+		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, 
 			"Restore to %d", ur->restart_position);
 		if (apr_file_seek(fp, APR_SET, &offset)!=APR_SUCCESS) {
 			ap_rprintf(r, FTP_C_FILEFAIL" Unable to set file postition\r\n");
@@ -967,7 +978,7 @@ HANDLER_DECLARE(stor)
 /* Check Restart */
 	if (ur->restart_position) {
 		apr_off_t offset = ur->restart_position;
-		ap_log_rerror(APLOG_MARK, APLOG_NOTICE | APLOG_NOERRNO, 0, r, 
+		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, 
 			"Restore to %d", ur->restart_position);
 		if (apr_file_seek(fp, APR_SET, &offset)!=APR_SUCCESS) {
 			ap_rprintf(r, FTP_C_FILEFAIL" Unable to set file postition\r\n");

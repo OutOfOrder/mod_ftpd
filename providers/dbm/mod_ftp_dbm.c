@@ -108,13 +108,15 @@ static const char * ftp_dbm_cmd_dbmtype(cmd_parms *cmd, void *config,
 	return NULL;
 }
 
-ftp_chroot_status_t ftp_dbm_map_chroot(const request_rec *r, const char **chroot)
+ftp_chroot_status_t ftp_dbm_map_chroot(const request_rec *r,
+										const char **chroot,
+										const char **initroot)
 {
 	apr_status_t res;
 	apr_dbm_t *file;
 	ftp_chroot_status_t ret = FTP_CHROOT_USER_NOT_FOUND;
 	apr_datum_t key,val = { 0 };
-	ftp_user_rec *ur = ftp_get_user_rec(r);
+	ftp_user_rec *ur  __attribute__ ((unused))= ftp_get_user_rec(r);
 	ftp_dbm_server_conf *pConfig = ap_get_module_config(r->server->module_config,
 										&ftp_dbm_module);
 
@@ -127,15 +129,17 @@ ftp_chroot_status_t ftp_dbm_map_chroot(const request_rec *r, const char **chroot
 	} else {
 		if (file != NULL) {
 			/* search the DB */
-			key.dptr = ur->user;
+			key.dptr = r->user;
 			key.dsize = strlen(key.dptr);
 
 			if (apr_dbm_exists(file, key)) {
 				if (apr_dbm_fetch(file, key, &val) == APR_SUCCESS) {
-					*chroot = apr_pstrdup(r->pool, val.dptr);
+					*chroot = apr_pstrndup(r->pool, val.dptr, val.dsize);
 					ret = FTP_CHROOT_USER_FOUND;
+					//*initroot = apr_pstrdup(r->pool,"/test");
 				}
 			}
+
 			apr_dbm_close(file);
 		} else {
 			ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,

@@ -215,6 +215,49 @@ static int ftp_init_handler(apr_pool_t *p, apr_pool_t *log, apr_pool_t *ptemp,
 	return OK;
 }
 
+static int translate_chroot(request_rec *r)
+{
+	char *name = r->uri;
+	int is_absolute;
+	char *filename;
+	apr_status_t res;
+	apr_finfo_t statbuf;
+	ftp_config_rec *pConfig = ap_get_module_config(r->server->module_config,
+								&ftp_module);
+	ftp_user_rec *ur = ftp_get_user_rec(r);
+
+    if (!pConfig->bEnabled) {
+        return DECLINED;
+    }
+
+	if (!ur->chroot) {
+		return DECLINED;
+	}
+	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+		"input URI is %s -> %s", name, ur->chroot);
+	is_absolute = ap_os_is_path_absolute(r->pool, ur->chroot);
+	if (is_absolute) {
+		filename = apr_pstrcat(r->pool, ur->chroot, NULL);
+	} else {
+		filename = apr_pstrcat(r->pool, ap_document_root(r),"/", ur->chroot, NULL);
+	}
+	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+		"filename set to %s",filename);
+	/* TODO: Side affect.. stating the dir causes missing chroot to fall back to Docuementroot */
+	if ((res = apr_stat(&statbuf, filename, APR_FINFO_MIN, r->pool))
+			== APR_SUCCESS || res == APR_INCOMPLETE) {
+		r->filename = apr_pstrcat(r->pool, filename, name, NULL);
+		//r->finfo = statbuf;
+		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+			"r->filename set to %s",r->filename);
+		return OK;
+	} else {
+		ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
+			"Stat Error");
+	}
+	return DECLINED;
+}
+
 FTP_DECLARE(void) ftp_register_handler(char *key, ap_ftp_handler *func, int states,
 							const char *help_text, void *data, apr_pool_t *p)
 {
@@ -275,13 +318,17 @@ static const char *ftp_set_chroot_order(cmd_parms *cmd,
 
 static void register_hooks(apr_pool_t *p)
 {
+	static const char * const aszPre[] = { "mod_alias.c", NULL };
+	static const char * const aszSucc[]= { "mod_vhost_alias.c", NULL };
 	ap_ftp_hash = apr_hash_make(p);
 
     ap_hook_process_connection(process_ftp_connection,NULL,NULL,
 			       APR_HOOK_MIDDLE);
 /* For registering ftp methods */
 	ap_hook_post_config(ftp_init_handler, NULL, NULL, APR_HOOK_MIDDLE);
-
+/* Translate hook for Chroot supporting */
+	ap_hook_translate_name(translate_chroot, aszPre, aszSucc, APR_HOOK_MIDDLE);
+	
 /* Register input/output filters */
 /*    ap_register_output_filter("FTP_COMMAND_OUTPUT", ftp_command_output_filter,
 							  NULL, AP_FTYPE_CONNECTION);
