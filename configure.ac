@@ -10,6 +10,8 @@ AC_PROG_CC
 
 AC_ARG_ENABLE(dbm_provider, [  --disable-dbm-provider  Do not compile the dbm provider],
 		, enable_dbm_provider=yes)
+AC_ARG_ENABLE(default_provider, [  --disable-default-provider  Do not compile the default provider],
+		, enable_default_provider=yes)
 AC_ARG_ENABLE(dbi_provider, [  --enable-dbi-provider  Ccompile the dbi provider],
 		enable_dbi_provider=yes, )
 
@@ -25,6 +27,10 @@ dnl configure providers
 
 if test "$enable_dbm_provider" = yes; then
 	AC_CONFIG_SUBDIRS(providers/dbm)
+fi
+
+if test "$enable_default_provider" = yes; then
+	AC_CONFIG_SUBDIRS(providers/default)
 fi
 
 if test "$enable_dbi_provider" = yes; then
