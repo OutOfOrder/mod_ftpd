@@ -21,5 +21,7 @@ Makefile
 Makefile.in
 missing
 mkinstalldirs
+stamp-h
+stamp-h.in
 INSTALL
 .tm_project.cache
