@@ -69,7 +69,7 @@ TODO: TODO_HEADER $(SOURCES) $(HEADERS)
 	./gen_todo.pl
 
 $(TARGET):
-	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(INCLUDES) $(CFLAGS) @DEFS@ $(SOURCES) 
+	@APXS_BIN@ -c -o @PACKAGE_NAME@.la $(INCLUDES) $(CFLAGS) $(LDADD) @DEFS@ $(SOURCES) 
 
 include:
 	rm -rf include

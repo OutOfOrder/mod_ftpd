@@ -1,3 +1,8 @@
+0.6: 2003-11-29
+	User Chroots are now supported via a provider mechanism allowing plugins to
+		be written to supply the user to chroot mapping. Only one sample 
+		implementation is provided in the providers/dbm/ directory.
+
 0.5: 2003-11-25
 	Basic FTP server fully implemented..
 	Authentication using Apache Auth Modules

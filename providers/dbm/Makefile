@@ -41,7 +41,7 @@ DISTFILES = $(STD_DIST) $(EXTRA_DIST) $(SOURCES) $(HEADERS)
 all: $(TARGET)
 
 $(TARGET):
-	/opt/apache2//bin/apxs -c -o mod_ftp_dbm.la $(CFLAGS) $(INCLUDES) -DHAVE_CONFIG_H $(SOURCES) 
+	/opt/apache2//bin/apxs -c -o mod_ftp_dbm.la $(CFLAGS) $(INCLUDES) $(LDADD) -DHAVE_CONFIG_H $(SOURCES) 
 
 include:
 	rm -rf include

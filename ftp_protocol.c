@@ -320,8 +320,13 @@ HANDLER_DECLARE(passwd)
 	} else {
 		ur->chroot = NULL;
 	}
+	/* TODO: check to make sure this directory actually exists and fall back to chroot dir */
 	if (initroot) {
-		ur->current_directory = apr_pstrdup(ur->p, initroot);
+		if (initroot[0]=='/') {
+			ur->current_directory = apr_pstrdup(ur->p, initroot);
+		} else {
+			ur->current_directory = apr_pstrcat(ur->p, "/", initroot, NULL);
+		}
 	} else {
 		ur->current_directory = apr_pstrdup(ur->p,"/");		
 	}

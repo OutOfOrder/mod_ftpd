@@ -116,6 +116,7 @@ ftp_chroot_status_t ftp_dbm_map_chroot(const request_rec *r,
 	apr_dbm_t *file;
 	ftp_chroot_status_t ret = FTP_CHROOT_USER_NOT_FOUND;
 	apr_datum_t key,val = { 0 };
+	char *value, *tok, *tok_ses;
 	ftp_user_rec *ur  __attribute__ ((unused))= ftp_get_user_rec(r);
 	ftp_dbm_server_conf *pConfig = ap_get_module_config(r->server->module_config,
 										&ftp_dbm_module);
@@ -134,9 +135,18 @@ ftp_chroot_status_t ftp_dbm_map_chroot(const request_rec *r,
 
 			if (apr_dbm_exists(file, key)) {
 				if (apr_dbm_fetch(file, key, &val) == APR_SUCCESS) {
-					*chroot = apr_pstrndup(r->pool, val.dptr, val.dsize);
-					ret = FTP_CHROOT_USER_FOUND;
-					//*initroot = apr_pstrdup(r->pool,"/test");
+					value = apr_pstrndup(r->pool, val.dptr, val.dsize);
+					tok = apr_strtok(value, ":", &tok_ses);
+					if (tok != NULL) {
+						*chroot = apr_pstrdup(r->pool, tok);
+						tok = apr_strtok(NULL, ":", &tok_ses);
+						if (tok != NULL) {
+							*initroot = apr_pstrdup(r->pool, tok);
+						}
+						ret = FTP_CHROOT_USER_FOUND;
+					} else {
+						ret = FTP_CHROOT_FAIL;
+					}
 				}
 			}
 

@@ -89,6 +89,16 @@ FTPChroot
 	XRMD: ability to remove a directory
 	RNTO: ability to rename files and directories.
 
+------------------------------
+IV. 1  FTP DBM Chroot provider
+------------------------------
+FTPChrootDBM
+	The fielname of the database to use. Can be absolute or relative to the 
+	server root.
+
+FTPChrootDBMType
+	The type of Database the file is (default,DB,GDBM,NDBM,SDBM)
+
 --------------------------------
 V. Known issues and limitations
 --------------------------------
@@ -104,11 +114,6 @@ this branch of Apache.
 
 * Transfered files do NOT go through apache filters and bucket brigades.. When
 I figure them out, I will support that feature.. (dynamic FTP content..)
-
-* There is currently no support user/group dependent roots.. (ie. a 
-different FTP root for a specific logged in user). It is, however, being planned
-and will be added in a future release once the base FTP specification is
-implemented.
 
 * IPv6 Support.. Yup, not in there.. It's in the TODO, I just need to support 
 the extended FTP commands, and then hope it works, as I don't have an IPv6
