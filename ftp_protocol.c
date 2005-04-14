@@ -329,7 +329,7 @@ int process_ftpd_connection_internal(request_rec *r, apr_bucket_brigade *bb)
         }
 		request_time = apr_time_now();
 		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-				"C:(%d)%s",len, buffer);
+				"C:(%"APR_SIZE_T_FMT")%s",len, buffer);
 		/* This command moves the pointer of buffer to the end of the extracted string */
         command = ap_getword_white_nc(p, &buffer);
         ap_str_tolower(command);
@@ -557,10 +557,10 @@ HANDLER_DECLARE(cd)
 	//char *newpath;	/* temp space for merged local path */
     ftpd_user_rec *ur = ftpd_get_user_rec(r);
 
-	if ((int)data==1) {
+	if (data != NULL) {
 		patharg = "..";
 	} else {
-    	patharg = buffer;
+    	    patharg = buffer;
 	}
 	if (apr_filepath_merge(&r->uri,ur->current_directory,patharg, 
 			APR_FILEPATH_TRUENAME, r->pool) != APR_SUCCESS) {
@@ -599,7 +599,7 @@ HANDLER_DECLARE(help)
 
 	command = ap_getword_white_nc(r->pool, &buffer);
 	if (command[0]=='\0') {
-		if (!(int)data) { /* HELP */
+		if (data == NULL) { /* HELP */
 			ap_rprintf(r, FTP_C_HELPOK"-The following commands are implemented.\r\n");
 		} else { /* FEAT */
 			ap_rprintf(r, FTP_C_FEATOK"-FEAT\r\n");
@@ -610,7 +610,7 @@ HANDLER_DECLARE(help)
 			apr_hash_this(hash_itr, (const void **)&command, NULL,(void **)&handle_func);
 			command = apr_pstrdup(r->pool,command);
 			ap_ftpd_str_toupper(command);
-			if (!(int)data) { /* HELP */
+			if (data == NULL) { /* HELP */
 				column++;
 				ap_rprintf(r,"   %c%-4s",
 					(handle_func->states & FTPD_FLAG_NOT_IMPLEMENTED)?'*':' ',
@@ -624,7 +624,7 @@ HANDLER_DECLARE(help)
 				}
 			}
 		}
-		if (!(int)data) { /* HELP */
+		if (data == NULL) { /* HELP */
 			if ((column % 7)!=0) {
 				ap_rputs("\r\n",r);
 			}
@@ -953,7 +953,7 @@ HANDLER_DECLARE(list)
 		ftpd_data_socket_close(ur);
 		return FTPD_HANDLER_SERVERERROR;
 	}
-	if ((int)data==1) {  /* NLST */
+	if (data != NULL) {  /* NLST */
 		flags = APR_FINFO_NAME | APR_FINFO_TYPE;
 	} else { /* LIST */
 		flags = APR_FINFO_NAME | APR_FINFO_TYPE | APR_FINFO_SIZE
@@ -970,7 +970,7 @@ HANDLER_DECLARE(list)
 		if (!apr_strnatcmp(entry.name,".") || !apr_strnatcmp(entry.name,"..")) {
 			continue;
 		}
-		if ((int)data==1) { /* NLST */
+		if (data != NULL) { /* NLST */
 			if (entry.filetype != APR_DIR) {
 				if (*buffer!='\0') {
 					listline = apr_psprintf(r->pool,"%s\r\n", ap_make_full_path(r->pool,buffer, entry.name));
@@ -1128,7 +1128,7 @@ HANDLER_DECLARE(retr)
 	if (ur->restart_position) {
 		apr_off_t offset = ur->restart_position;
 		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, 
-			"Restore to %d", ur->restart_position);
+			"Restore to %"APR_OFF_T_FMT, ur->restart_position);
 		if (apr_file_seek(fp, APR_SET, &offset)!=APR_SUCCESS) {
 			ap_rprintf(r, FTP_C_FILEFAIL" Unable to set file postition\r\n");
 			ap_rflush(r);
@@ -1284,7 +1284,7 @@ HANDLER_DECLARE(stor)
 		return FTPD_HANDLER_SERVERERROR;
 	}
 
-	if (ur->restart_position || ((int)data==1)) {
+	if (ur->restart_position || (data != NULL)) {
 /* APPEnd, if the APPE command or REST before STOR is used */
 		flags = APR_WRITE | APR_CREATE | APR_APPEND;
 		/* Set Method */
@@ -1310,7 +1310,7 @@ HANDLER_DECLARE(stor)
 	/* pull directory configuration AFTER check_acl */
 	dConfig =  ap_get_module_config(r->per_dir_config, &ftpd_module);
 
-	if (!ur->restart_position && ((int)data!=1) && dConfig->bAllowOverwrite) {
+	if (!ur->restart_position && (data == NULL) && dConfig->bAllowOverwrite) {
 		flags = APR_WRITE | APR_CREATE | APR_TRUNCATE;
 	}
 
@@ -1335,7 +1335,7 @@ HANDLER_DECLARE(stor)
 	if (ur->restart_position) {
 		apr_off_t offset = ur->restart_position;
 		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, 
-			"Restore to %d", ur->restart_position);
+			"Restore to %"APR_OFF_T_FMT, ur->restart_position);
 		if (!ur->binaryflag) {
 			ap_rprintf(r, FTP_C_FILEFAIL" Cannot restore a ASCII transfer\r\n");
 			ap_rflush(r);
@@ -1571,7 +1571,7 @@ HANDLER_DECLARE(restart)
 
 	ur->restart_position = atoi(buffer);
 	if (ur->restart_position >= 0) {
-		ap_rprintf(r, FTP_C_RESTOK" Restarting at %d. Send RETR or STOR.\r\n", ur->restart_position);
+		ap_rprintf(r, FTP_C_RESTOK" Restarting at %"APR_OFF_T_FMT". Send RETR or STOR.\r\n", ur->restart_position);
 	} else {
 		ap_rprintf(r, FTP_C_INVALIDARG" Invalid restart postition.\r\n");
 		rv = FTPD_HANDLER_SERVERERROR;

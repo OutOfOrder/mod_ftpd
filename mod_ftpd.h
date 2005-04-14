@@ -26,7 +26,7 @@ extern "C" {
 
 /* Current version of the Plugin interface */
 
-#define FTPD_PLUGIN_VERSION 20040108
+#define FTPD_PLUGIN_VERSION 20050414
 
 /* Create a set of FTPD_DECLARE(type), FTPD_DECLARE_NONSTD(type) and 
  * FTPD_DECLARE_DATA with appropriate export and import tags for the platform
@@ -198,14 +198,14 @@ typedef struct ftpd_user_rec {
 	char *current_directory;
 	char *useragent;
 
-	int binaryflag;
-	int restart_position;
+	apr_byte_t binaryflag;
+	apr_off_t restart_position;
 	char *rename_file;
 
 	ftpd_datacon_rec	data;
 
     ftpd_state state;
-	int epsv_lock;
+	apr_byte_t epsv_lock;
 
 } ftpd_user_rec;
 
