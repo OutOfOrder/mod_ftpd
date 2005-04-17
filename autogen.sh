@@ -1,15 +1,15 @@
 #!/bin/sh
 
 if [ -z $ACLOCAL ]; then
-	ACLOCAL=aclocal-1.5
+	ACLOCAL=aclocal
 fi
 if [ -z $AUTOCONF ]; then 
-	AUTOCONF=autoconf-2.53
+	AUTOCONF=autoconf
 fi
 if [ -z $AUTOHEADER ]; then
-	AUTOHEADER=autoheader-2.53
+	AUTOHEADER=autoheader
 fi
-rm -rf autom4te-2.53.cache
+rm -rf autom4te.cache
 $ACLOCAL -I m4
 $AUTOHEADER
 $AUTOCONF
