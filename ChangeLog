@@ -1,3 +1,7 @@
+0.13.1: 2005-04-17
+	fix for IPv4 not working on machines that have IPv6 and IPv4 enabled
+	check for existence of mod_status.h.
+
 0.13.0: 2005-01-30
 	updated license to ASL 2.0
 	fixd FreeBSD global lock creation issue (Reported by Paul Querna)
