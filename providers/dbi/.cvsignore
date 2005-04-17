@@ -4,7 +4,7 @@ aclocal.m4
 .deps
 *.lo
 *.slo
-autom4te-2.53.cache
+autom4te.cache
 Makefile
 configure
 config.cache
