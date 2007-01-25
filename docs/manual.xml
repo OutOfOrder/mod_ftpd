@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet href="/xslt/docbook.css" type="text/css"?>
-<!DOCTYPE article PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN" "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd" [
-<!ENTITY contactemail "urkle@outoforder.cc">
+<!DOCTYPE article PUBLIC "-//OOOCC//DTD Simplified DocBook XML V1.1 Variant V1.0//EN" "http://outoforder.cc/dtds/odocbook/1.1/odocbook.dtd" [
+<!ENTITY contactemail "urkle &lt;at&gt; outoforder &lt;dot&gt; cc">
 ]>
 <article>
   <articleinfo>
@@ -9,16 +9,30 @@
     <author>
       <firstname>Edward</firstname>
       <surname>Rudd</surname>
-      <affiliation>
-        <address format="linespecific"><email>&contactemail;</email></address>
-      </affiliation>
+      <contrib>Maintainer</contrib>
+      <authorblurb>
+        <simpara><email>&contactemail;</email></simpara>
+      </authorblurb>
     </author>
     <copyright>
       <year>2003</year>
       <year>2004</year>
+      <year>2005</year>
+      <year>2006</year>
+      <year>2007</year>
       <holder>Edward Rudd</holder>
     </copyright>
     <revhistory>
+      <revision>
+        <revnumber>0.6</revnumber>
+        <date>2007-01-25</date>
+        <revremark>Added documentation about Pasv Override parameters</revremark>
+      </revision>
+      <revision>
+        <revnumber>0.5</revnumber>
+        <date>2006-02-13</date>
+        <revremark>Converted to Simpliefied docbook 1.1</revremark>
+      </revision>
       <revision>
         <revnumber>0.4</revnumber>
         <date>2005-01-30</date>
@@ -41,14 +55,14 @@
       </revision>
     </revhistory>
   </articleinfo>
-  <sect1 id="intro">
+  <section id="intro">
     <title>Introduction</title>
     <para>This is a FTP Protocol Server module for Apache 2.0 and 2.1. It is based loosely on the mod_pop3 code base, so many thanks to the author of mod_pop3. This is still a developmental module, and directives and features may change without notice from release to release. There is a sample configuration provided at the end of this document. </para>
-    <sect2 id="copyright">
+    <section id="copyright">
       <title>Copyright and License</title>
       <para>This document, <emphasis>mod_ftpd Manual</emphasis>, is <trademark class="copyright">Copyright</trademark> 2002 by <emphasis>Edward Rudd</emphasis>. Permission is granted to copy and distribute this document so long as it is included with the associated application, mod_ftpd, in source or binary form.</para>
-    </sect2>
-    <sect2 id="credits">
+    </section>
+    <section id="credits">
       <title>Credits / Contributors</title>
       <para> In this document, I have the pleasure of acknowledging: </para>
       <itemizedlist>
@@ -56,19 +70,19 @@
           <para>Paul Querna <email>chip force-elite.com</email> for testing and bouncing ideas off of and writing DBI provider.</para>
         </listitem>
       </itemizedlist>
-    </sect2>
-    <sect2 id="feedback">
+    </section>
+    <section id="feedback">
       <title>Feedback</title>
       <para>Feedback is most certainly welcome for this document. Send your additions, comments and criticisms to the following email address : <email>&contactemail;</email>. </para>
-    </sect2>
-    <sect2 id="translations">
+    </section>
+    <section id="translations">
       <title>Translations</title>
       <para>Currently I there are no translations of this document. However if you would like to translate this document into other languages please do so and submit them to this email address : <email>&contactemail;</email>.</para>
-    </sect2>
-  </sect1>
-  <sect1 id="compiling">
+    </section>
+  </section>
+  <section id="compiling">
     <title>Building and Installation</title>
-    <para><orderedlist>
+    <orderedlist>
         <listitem>
           <para>./configure --with-apxs=/path/to/apxs</para>
         </listitem>
@@ -78,18 +92,18 @@
         <listitem>
           <para>su -c "make install"</para>
         </listitem>
-      </orderedlist></para>
-  </sect1>
-  <sect1 id="sampleconfig">
+    </orderedlist>
+  </section>
+  <section id="sampleconfig">
     <title>Sample Configuration</title>
     <example>
       <title>A sample Apaceh 2.0 configuration</title>
-      <programlisting>LoadModule ftpd_module	modules/mod_ftpd.so
+      <programlisting>LoadModule ftpd_module modules/mod_ftpd.so
 # Load any of the provider modules here (for user specific chroots)
-#LoadModule ftpd_dbm_module       modules/mod_ftpd_dbm.so
-#LoadModule ftpd_dbi_module      modules/mod_ftpd_dbi.so
-LoadModule ftpd_default_module   modules/mod_ftpd_default.so
-#LoadModule ftpd_fail_module      modules/mod_ftpd_fail.so
+#LoadModule ftpd_dbm_module modules/mod_ftpd_dbm.so
+#LoadModule ftpd_dbi_module modules/mod_ftpd_dbi.so
+LoadModule ftpd_default_module modules/mod_ftpd_default.so
+#LoadModule ftpd_fail_module modules/mod_ftpd_fail.so
 
 Listen 21
 &lt;VirtualHost *:21&gt;
@@ -122,7 +136,7 @@ Listen 21
                         deny from all
                 &lt;/LimitExcept&gt;
         &lt;/Location&gt;
-# allow making directories, listing, chdir, and uploading files. 
+# allow making directories, listing, chdir, and uploading files.
 # But don't allow retrieving files.
         &lt;Location /upload&gt;
                 &lt;LimitExcept LIST PUT MKCOL CHDIR&gt;
@@ -132,10 +146,10 @@ Listen 21
         &lt;/Location&gt;
 &lt;/VirtualHost&gt;</programlisting>
     </example>
-  </sect1>
-  <sect1 id="configuration">
+  </section>
+  <section id="configuration">
     <title>Configuration Directives</title>
-    <sect2 id="mainmodule">
+    <section id="mainmodule">
       <title>Main Module Directives</title>
       <variablelist>
         <varlistentry>
@@ -184,6 +198,18 @@ Listen 21
           <term>FtpPasvMaxPort</term>
           <listitem>
             <para>Maximum PASV port to use for Data connections. The default value is 65535. This value must be greater than FTPPasvMinPort.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpPasvOverrideAddr</term>
+          <listitem>
+            <para>Override the Passive source port (the ftp server) returned to the client with this IP. The default is to use the IP based on incoming connection.</para>
+          </listitem>
+        </varlistentry>
+        <varlistentry>
+          <term>FtpPasvOverrideAddrExclusion</term>
+          <listitem>
+            <para>CIDR formatted (ip/{mask or # of bits) netblock that will NOT be overriden when FtpPasvOverrideAddr is set.  Example: 192.168.1.0/24</para>
           </listitem>
         </varlistentry>
         <varlistentry>
@@ -273,8 +299,8 @@ Listen 21
           </listitem>
         </varlistentry>
       </variablelist>
-    </sect2>
-    <sect2 id="mod_default">
+    </section>
+    <section id="mod_default">
       <title>FTP Default provider</title>
       <para>LoadModule ftpd_default_module modules/mod_ftpd_default.so</para>
       <para>This module is useful to provide a fail-back chroot path if other modules do not provide one for the user attempting to login.</para>
@@ -292,13 +318,13 @@ Listen 21
           </listitem>
         </varlistentry>
       </variablelist>
-    </sect2>
-    <sect2 id="mod_fail">
+    </section>
+    <section id="mod_fail">
       <title>FTP Fail provider</title>
       <para>LoadModule ftpd_fail_module modules/mod_ftpd_fail.so</para>
       <para>There is no configuration for this module.. Just add it to FtpChrootOrder and any user that hits this module will immediately fail and not be allowed to login. Use this in a chain of modules and this as a fail-back to deny logins if they do not have a chroot assigned.</para>
-    </sect2>
-    <sect2 id="mod_dbm">
+    </section>
+    <section id="mod_dbm">
       <title>FTP DBM provider</title>
       <para>LoadModule ftpd_dbm_module modules/mod_ftpd_dbm.so</para>
       <variablelist>
@@ -315,8 +341,8 @@ Listen 21
           </listitem>
         </varlistentry>
       </variablelist>
-    </sect2>
-    <sect2 id="mod_dbi">
+    </section>
+    <section id="mod_dbi">
       <title>FTP DBI provider</title>
       <para>LoadModule ftpd_dbi_module modules/mod_ftpd_dbi.so</para>
       <variablelist>
@@ -417,9 +443,9 @@ Listen 21
           </listitem>
         </varlistentry>
       </variablelist>
-    </sect2>
-  </sect1>
-  <sect1 id="issues">
+    </section>
+  </section>
+  <section id="issues">
     <title>Knwon issues and limitations</title>
     <para>These are some of the known issues and limitations of the module. Also check the <filename>TODO</filename> file for any issues that did not make their way into this document. And of course, if you feel the urge to actually implement something on my <filename>TODO</filename> list feel free to submit a unified diff patch to the following email address : <email>&contactemail;</email>.</para>
     <itemizedlist>
@@ -451,8 +477,8 @@ Listen 21
         <para>I need to write documentation on the provider interface. However, the header file <filename>mod_ftpd.h</filename> is quite self documented.</para>
       </listitem>
     </itemizedlist>
-  </sect1>
-  <sect1 id="moreinfo">
+  </section>
+  <section id="moreinfo">
     <title>Contact Information</title>
     <para>You can contact me via the following mediums.</para>
     <itemizedlist>
@@ -470,5 +496,5 @@ Listen 21
       </listitem>
     </itemizedlist>
     <para>Please use a meaningful subject line for e-mail, otherwise your e-mail may be silently deposited in my junk mail folder by my <acronym>SPAM</acronym> filters and possibly never seen by me. Use something like "mod_ftpd patch to implement feature X" would be quite acceptable, however, "PLEASE READ THIS NOW" is quite unacceptable and will most likely never be read.</para>
-  </sect1>
+  </section>
 </article>

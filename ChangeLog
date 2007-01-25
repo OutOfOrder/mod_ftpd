@@ -1,3 +1,6 @@
+0.14.0: 2007-01-25
+	add in support for Pasv Override to override the returned IP address for PASV connections, usefull for firewalled FTP servers
+
 0.13.1: 2005-04-17
 	fix for IPv4 not working on machines that have IPv6 and IPv4 enabled
 	check for existence of mod_status.h.

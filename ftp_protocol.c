@@ -164,7 +164,7 @@ static ftpd_limit_status_t ftpd_call_limit(ftpd_svr_config_rec *pConfig,
 			} else { /* FTPD_LIMIT_DEFAULT */
 				/* this is only hit during checkin/checkout */
 				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-					"Check%s called: %s", 
+					"Check%s called: %s",
 					check_type==FTPD_LIMIT_CHECKIN?"in":"out",
 					current_provider->name);
 			}
@@ -211,13 +211,13 @@ static request_rec *ftpd_create_subrequest(request_rec *r, ftpd_user_rec *ur)
 	ap_set_sub_req_protocol(rnew, r);
 
 	rnew->assbackwards = 0;
-	rnew->protocol = "FTP";
+	rnew->protocol = r->protocol;
 	ap_run_create_request(rnew);
 
 /* TODO: Play with filters in create subreq??? */
 	rnew->output_filters = r->connection->output_filters;
 	rnew->input_filters = r->connection->input_filters;
-	
+
 	ap_set_module_config(rnew->request_config, &ftpd_module, ur);
 	return rnew;
 }
@@ -229,8 +229,8 @@ typedef enum {
 	FTPD_CHECL_ACL_ALL  = 0x03,
 } ftpd_check_acl_mode;
 
-static int ftpd_check_acl_ex(const char *newpath, request_rec *r, 
-		ftpd_check_acl_mode acl_mode) 
+static int ftpd_check_acl_ex(const char *newpath, request_rec *r,
+		ftpd_check_acl_mode acl_mode)
 {
 	apr_status_t res;
 	if (newpath) {
@@ -253,7 +253,7 @@ static int ftpd_check_acl_ex(const char *newpath, request_rec *r,
 		"URI %s -> %s", r->uri, r->filename);
 	if ((res = ap_location_walk(r)) != OK) {
 		return res;
-	}	
+	}
 	if ((res = ap_run_access_checker(r)) != OK) {
 		return res;
 	}
@@ -366,7 +366,7 @@ int process_ftpd_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 		handler_r = ftpd_create_subrequest(r,ur);
 		handler_r->request_time = request_time;
 		ap_ftpd_str_toupper(command);
-	
+
 		if (handle_func->states & FTPD_FLAG_HIDE_ARGS) {
 			handler_r->the_request = apr_pstrdup(handler_r->pool, command);
 		} else {
@@ -394,7 +394,7 @@ int process_ftpd_connection_internal(request_rec *r, apr_bucket_brigade *bb)
 				ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
 					"URI is empty!!");
 			}
-			ap_run_log_transaction(handler_r);			
+			ap_run_log_transaction(handler_r);
 		}
 
 		ap_increment_counts(r->connection->sbh, handler_r);
@@ -412,8 +412,10 @@ int process_ftpd_connection_internal(request_rec *r, apr_bucket_brigade *bb)
         }
 		apr_pool_destroy(handler_r->pool);
     }
+    // Clean up any stale PASV connection
+    ftpd_data_socket_close(ur);
 	if (ur->state & FTPD_STATE_TRANSACTION) {
-		
+
 	}
     return FTPD_HANDLER_OK;
 }
@@ -447,7 +449,7 @@ HANDLER_DECLARE(user)
     ur->user = apr_pstrdup(ur->p, user);
 
     ap_rprintf(r, FTP_C_GIVEPWORD" Password required for %s.\r\n", ur->user);
-    ap_rflush(r);    
+    ap_rflush(r);
 	ur->state = FTPD_STATE_USER_ACK;
 	return FTPD_HANDLER_OK;
 }
@@ -464,7 +466,7 @@ HANDLER_DECLARE(passwd)
 					&ftpd_module);
 
 	/* Get chroot mapping */
-	
+
 	r->user = apr_pstrdup(r->pool, ur->user);
 	chroot_ret = ftpd_call_chroot(pConfig,r,&chroot,&initroot);
 	if (chroot_ret == FTPD_CHROOT_FAIL)
@@ -473,7 +475,7 @@ HANDLER_DECLARE(passwd)
     passwd = apr_psprintf(r->pool, "%s:%s", ur->user,
                           ap_getword_white_nc(r->pool, &buffer));
     ur->auth_string = apr_psprintf(ur->p, "Basic %s",
-                                   ap_pbase64encode(r->pool, passwd)); 
+                                   ap_pbase64encode(r->pool, passwd));
     apr_table_set(r->headers_in, "Authorization", ur->auth_string);
 
 	if (chroot) {
@@ -490,10 +492,10 @@ HANDLER_DECLARE(passwd)
 			ur->current_directory = apr_pstrcat(ur->p, "/", initroot, NULL);
 		}
 	} else {
-		ur->current_directory = apr_pstrdup(ur->p,"/");		
+		ur->current_directory = apr_pstrdup(ur->p,"/");
 	}
-/* CHDIR as we are changing into the root directory on login 
- * Probably not a good way to prevent logins but it works 
+/* CHDIR as we are changing into the root directory on login
+ * Probably not a good way to prevent logins but it works
  */
 	r->method = apr_pstrdup(r->pool, "CHDIR");
 	r->method_number = ftpd_methods[FTPD_M_CHDIR];
@@ -504,7 +506,7 @@ HANDLER_DECLARE(passwd)
 		/* Bail out immediatly if this occurs? */
 		return FTPD_HANDLER_QUIT;
 	}
-	
+
     if ((res = ap_run_check_user_id(r)) != OK) {
         ap_rprintf(r, FTP_C_LOGINERR" Login incorrect\r\n");
         ap_rflush(r);
@@ -562,7 +564,7 @@ HANDLER_DECLARE(cd)
 	} else {
     	    patharg = buffer;
 	}
-	if (apr_filepath_merge(&r->uri,ur->current_directory,patharg, 
+	if (apr_filepath_merge(&r->uri,ur->current_directory,patharg,
 			APR_FILEPATH_TRUENAME, r->pool) != APR_SUCCESS) {
 		ap_rprintf(r, FTP_C_FILEFAIL" Invalid path.\r\n");
 		ap_rflush(r);
@@ -698,7 +700,8 @@ HANDLER_DECLARE(clnt)
 
 HANDLER_DECLARE(pasv)
 {
-	apr_sockaddr_t *listen_addr, *local_addr = r->connection->local_addr;
+	apr_sockaddr_t *listen_addr, *local_addr = r->connection->local_addr,
+                *remote_addr = r->connection->remote_addr;
 	apr_port_t port;
 	char *ipaddr;
 	int family;
@@ -711,10 +714,10 @@ HANDLER_DECLARE(pasv)
 /* Close old socket if already connected */
 	ftpd_data_socket_close(ur);
 
-	apr_sockaddr_ip_get(&ipaddr, local_addr);
+    apr_sockaddr_ip_get(&ipaddr, local_addr);
+    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+        "Ipaddr Local Socket %s", ipaddr);
 
-	ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-		"Ipaddr info. %s", ipaddr);
 	/* Argument parsing */
 	if (data) { /* EPSV command */
 		family = atoi(buffer);
@@ -741,7 +744,7 @@ HANDLER_DECLARE(pasv)
 	} /* EPSV */
 	family = local_addr->family;
 #if APR_HAVE_IPV6
-	if (family == APR_INET6 && 
+	if (family == APR_INET6 &&
 		IN6_IS_ADDR_V4MAPPED((struct in6_addr *)local_addr->ipaddr_ptr)) {
 			family = APR_INET;
 	}
@@ -766,7 +769,7 @@ HANDLER_DECLARE(pasv)
 		port += pConfig->nMinPort;
 		if ((res = apr_sockaddr_info_get(&listen_addr,ipaddr, family, port, 0, ur->data.p))!=APR_SUCCESS) {
 			ap_rprintf(r, FTP_C_PASVFAIL" Unable to bind to address");
-			ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r, 
+			ap_log_rerror(APLOG_MARK, APLOG_ERR, res, r,
 				"Unable to set up local socket");
 			return FTPD_HANDLER_SERVERERROR;
 		}
@@ -780,22 +783,38 @@ HANDLER_DECLARE(pasv)
 		ap_rflush(r);
 		return FTPD_HANDLER_SERVERERROR;
 	}
-	
+
 /* open the socket in listen mode and allow 1 queued connection */
 	apr_socket_listen(ur->data.pasv, 1);
 
 	if (!data) { /* regular port command */
 		if (family == APR_INET) { /* IPv4 */
-			char *temp;
+            if (pConfig->sPasvAddr) {
+                if (pConfig->pPasvAddrExclusions) {
+                    apr_sockaddr_ip_get(&ipaddr,remote_addr);
+                    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                        "remote address %s", ipaddr);
+                    if (apr_ipsubnet_test(pConfig->pPasvAddrExclusions,remote_addr)==0) {
+                        ipaddr = pConfig->sPasvAddr;
+                    }
+                    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                        "Ipaddr Override Exclude %s", ipaddr);
+                } else {
+                    ipaddr = pConfig->sPasvAddr;
+                    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                        "Ipaddr Override %s", ipaddr);
+                }
+            }
+			char *temp, *temp2;
 		/* Change .'s to ,'s */
-			temp = ipaddr = apr_pstrdup(ur->data.p, r->connection->local_ip);
+			temp = temp2 = apr_pstrdup(ur->data.p,ipaddr);
 			while (*temp) {
 				if (*temp=='.')
 					*temp=',';
 				++temp;
 			}
 			ap_rprintf(r,FTP_C_PASVOK" Entering Passive Mode (%s,%d,%d)\r\n",
-				ipaddr, port >> 8, port & 255);
+				temp2, port >> 8, port & 255);
 		} else { // IPV6 */
 			ap_rprintf(r,FTP_C_PASVOK" =127,555,555,555,%d,%d\r\n",
 				port >> 8, port & 255);
@@ -1020,7 +1039,7 @@ HANDLER_DECLARE(list)
 					apr_cpystrn(strperms,"drwxr-xr-x",11);
 				/* TODO: config: resolve symlinks */
 				} else if (entry.filetype == APR_LNK) {
-					apr_cpystrn(strperms,"lrwxr-xr-x",11);					
+					apr_cpystrn(strperms,"lrwxr-xr-x",11);
 				} else {
 					apr_cpystrn(strperms,"-rw-r--r--",11);
 				}
@@ -1127,7 +1146,7 @@ HANDLER_DECLARE(retr)
 /* Check Restart */
 	if (ur->restart_position) {
 		apr_off_t offset = ur->restart_position;
-		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, 
+		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 			"Restore to %"APR_OFF_T_FMT, ur->restart_position);
 		if (apr_file_seek(fp, APR_SET, &offset)!=APR_SUCCESS) {
 			ap_rprintf(r, FTP_C_FILEFAIL" Unable to set file postition\r\n");
@@ -1334,7 +1353,7 @@ HANDLER_DECLARE(stor)
 /* Check Restart */
 	if (ur->restart_position) {
 		apr_off_t offset = ur->restart_position;
-		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, 
+		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
 			"Restore to %"APR_OFF_T_FMT, ur->restart_position);
 		if (!ur->binaryflag) {
 			ap_rprintf(r, FTP_C_FILEFAIL" Cannot restore a ASCII transfer\r\n");
@@ -1392,7 +1411,7 @@ HANDLER_DECLARE(stor)
 	ftpd_data_socket_close(ur);
 	apr_file_close(fp);
 
-	return FTPD_HANDLER_OK;	
+	return FTPD_HANDLER_OK;
 }
 
 HANDLER_DECLARE(rename)

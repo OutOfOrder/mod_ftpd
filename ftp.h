@@ -24,7 +24,7 @@
 #include "util_filter.h"
 
 #if APR_MAJOR_VERSION < 1
-/* With 1.0 apr_socket_create uses the apr_socket_create_ex prototype.. 
+/* With 1.0 apr_socket_create uses the apr_socket_create_ex prototype..
  * And apr_socket_create_ex is no more.
  * So lets remap apr_socket_create to apr_socket_create_ex
  */
@@ -32,7 +32,7 @@
 #endif
 
 #ifdef HAVE_CONFIG_H
-/* Undefine these to prevent conflicts between Apache ap_config_auto.h and 
+/* Undefine these to prevent conflicts between Apache ap_config_auto.h and
  * my config.h. Only really needed for Apache < 2.0.48, but it can't hurt.
  */
 #undef PACKAGE_BUGREPORT
@@ -67,6 +67,9 @@ typedef struct {
 	int bAllowFXP; /* Allow pasv and port connections from/to machines other than the client */
 	char *sFakeGroup; /* The fake group name to display for listings */
 	char *sFakeUser; /* The fake user name to display for listings */
+    char *sPasvAddr; /* PASV Override Source IP Address */
+    char *sPasvAddrExclusion; /* PASV Override Exclusion Netblock */
+    apr_ipsubnet_t *pPasvAddrExclusions; /* ipsubnet structure of parsed netblock exclusion */
 } ftpd_svr_config_rec;
 
 typedef struct {
@@ -76,7 +79,7 @@ typedef struct {
 apr_hash_t *ftpd_hash;
 
 #define FTPD_STRING_LENGTH 255
-#define FTPD_IO_BUFFER_MAX 262144 /*524288 1048576 */
+#define FTPD_IO_BUFFER_MAX 8192 /*262144 524288 1048576 */
 
 int process_ftpd_connection_internal(request_rec *r, apr_bucket_brigade *bb);
 
