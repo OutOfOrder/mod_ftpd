@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="../../../../../xsl/projects.xsl"?>
+<ooo title="mod_ftpd Documentation" path="/projects/apache/mod_ftpd/docs/">
+  <content type="docbook" mode="article">
+    <xi:include href="manual.xml" xmlns:xi="http://www.w3.org/2001/XInclude">
+      <xi:fallback>
+        <para>Error loading XML Documentation</para>
+      </xi:fallback>
+    </xi:include>
+  </content>
+</ooo>

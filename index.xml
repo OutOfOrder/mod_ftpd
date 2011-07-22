@@ -1,0 +1,144 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="../../../../xsl/projects.xsl"?>
+<ooo title="mod_ftpd" path="/projects/apache/mod_ftpd/" osi="on">
+ <section title="Abstract">
+    <content>
+     <div xmlns="http://www.w3.org/1999/xhtml">
+     mod_ftpd is a protocol module that allows Apache 2.0 to accept
+     FTP connections. This allows the FTP component to take advantage of Apache's
+     authentication system, filters and module support to easily extend the FTP
+     server.
+     </div>
+    </content>
+ </section>
+
+ <section title="Documentation">
+    <content>
+     <div xmlns="http://www.w3.org/1999/xhtml">
+        <a href="docs/">mod_ftpd documentation</a>
+     </div>
+    </content>
+ </section>
+
+  <requirements>
+    <title>Prerequisites</title>
+    <software name="Apache HTTPd" url="http://httpd.apache.org/">
+      <requirement version="2.0.40" type="minimum"/>
+    </software>
+  </requirements>
+
+  <changelog>
+    <entry version="0.14">
+      <content type="docbook">
+        <para>
+          This release adds support for overriding the PASV returned IP address with a fixed value. This is useful when
+          running mod_ftpd behind a firewall that does not support mangling the FTP traffic.
+        </para>
+      </content>
+    </entry>
+    <entry version="0.13.1">
+      <content type="docbook">
+        <para>
+          This release adds a fix so IPV4 passive transfers will work correctly on 
+          systems with IPV6 and IPV4 enabled.  Also compile errors about a missing mod_status.h
+          when compiling with old apache release has been resolved.
+        </para>
+      </content>
+    </entry>
+    <entry version="0.13.0">
+      <content type="docbook">
+        <para>
+          Version 0.13.0 had updated autoconf apache detection scripts that better handle 
+          a wider variety of apache installs. There are netware compiliation fixes.   
+          The per-dir FtpAllowOverwrite directive actually works now, please read the 
+          documentation on it's usage. This release moves the license to the ASL 2.0.
+        </para>
+        <para>
+          There are two new files in the distribution, build.bat and winconfig.h. These 
+          are used to compile mod_ftpd under MSVC in win32.  Copy the winconfig.h to config.h
+          and edit the build.bat script to point to the directories where you have various 
+          libraries installed on your win32 system.
+        </para>
+        <note role="important">
+          <simpara>
+            The win32 support is unsupported at the moment. Right now it compiles, 
+            allows users to login, but it does not allow downloads of files. Anyone 
+            with good debugging skills with win32 and MSVC who would like to track down
+            the issue, it would be appreciated.
+          </simpara>
+        </note>
+      </content>
+    </entry>
+    <entry version="0.12.0">
+      <content type="docbook">
+        <para>
+          Version 0.12.0 has changed names from mod_ftp to mod_ftpd. 
+          Update your configuration files accordingly. Also read through the
+          documentation as several of the configuration directives have changed names
+        </para>
+      </content>
+    </entry>
+ </changelog>
+ <downloads
+    name="mod_ftpd"
+    baseref="/downloads/mod_ftpd/"
+    extension="tar.bz2">
+  <category branch="stable">
+    <download version="0.14" md5sum="073532fb7837657cf52adecbb43a2f68"/>
+    <download version="0.13.1" md5sum="236bbacd61d434069d71493de916609f"/>
+    <download version="0.13.0" md5sum="d92a3a31c5baef53acc06dca13bb27cb"/>
+    <download version="0.12.3" md5sum="c0574d3c6923cd6a2eb61f1fcc997910"/>
+    <download version="0.12.2" md5sum="0a03bd24cce26ecab1d47dd51f2d69fa"/>
+    <download version="0.12.0" md5sum="b29f01314ee2f5ae32659286a6302564"/>
+    <download name="mod_ftp" version="0.11.0" md5sum="3b4a50cfef79d3930d41b2464d20d605"/>
+    <download name="mod-ftp" version="0.10.0" md5sum="346a743cff809ec69669e22fea52a78e"/>
+    <download name="mod-ftp" version="0.9.1" md5sum="31e35459283243ebc9842f5d6e45214b"/>
+    <download name="mod-ftp" version="0.9" md5sum="6957c807c3435c094d3b29f31e450003"/>
+    <download name="mod-ftp" version="0.8" md5sum="dc66330dcc00b98208ce76677ec26bae"/>
+    <download name="mod-ftp" version="0.7" md5sum="5722de3e06ec9c413784ad9944fa937e"/>
+    <download name="mod-ftp" version="0.6" md5sum="8155bf9fcdd215c0ba92669c8b49a92a"/>
+    <download name="mod-ftp" version="0.5" md5sum="efff0cc190bd545e8a1242d97655e7e8"/>
+    <download name="mod-ftp" version="0.4" md5sum="e995437eb382065afd47463fd5458710"/>
+    <download name="mod-ftp" version="0.3" md5sum="7956e520b6af3f36d3c09edcc0b6d9d3"/>
+  </category>
+  <category>
+    <title>Repositories</title>
+    <repository
+        type="svn"
+        name="mod_ftpd"
+        baseref="http://svn.outoforder.cc/"
+        view="chora"/>
+  </category>
+ </downloads>
+
+  <mailinglists spam="warning">
+    <content type="docbook">
+      <para>
+        There are two mailing lists for mod_ftpd. The first is the generic
+        announcement mailing list which provides announcements for all software releases
+        on OutOfOrder.cc, but can be filtered by choosing topics in the mailing list
+        options page. The second is the user mailing list specific to mod_ftpd
+        only. Release announcements will be cross posted to both lists.
+      </para>
+    </content>
+    <list>
+      <mailinglist name="announce" type="mailman" host="lists.outoforder.cc"/>
+      <mailinglist name="mod_ftpd" type="mailman" host="lists.outoforder.cc"/>
+    </list>
+ </mailinglists>
+
+  <section position="bottom">
+    <title>Contact &amp; Help</title>
+    <content type="docbook">
+      <para>
+        E-Mail me, <ulink url="/email/?Alias=Edward+Rudd&amp;Subject=mod_ftpd">Edward Rudd</ulink>, about mod_ftpd.
+      </para>
+      <para>
+        Send an e-mail to the <link linkend="mailinglist">mod_ftpd mailing list</link>.
+      </para>
+      <para>
+        Bugs should be reported to the <ulink url="http://bugs.outoforder.cc">OutOfOrder.cc Bug Tracker</ulink>.
+      </para>
+    </content>
+  </section>
+</ooo>
