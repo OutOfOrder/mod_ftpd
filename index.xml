@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <?xml-stylesheet type="text/xsl" href="../../../../xsl/projects.xsl"?>
-<ooo title="mod_ftpd" path="/projects/apache/mod_ftpd/" osi="on">
+<ooo title="mod_ftpd" path="/projects/httpd/mod_ftpd/" osi="on">
  <section title="Abstract">
     <content>
      <div xmlns="http://www.w3.org/1999/xhtml">
