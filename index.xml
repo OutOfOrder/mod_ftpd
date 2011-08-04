@@ -103,11 +103,7 @@
   </category>
   <category>
     <title>Repositories</title>
-    <repository
-        type="svn"
-        name="mod_ftpd"
-        baseref="http://svn.outoforder.cc/"
-        view="chora"/>
+    <repository type="git" name="httpd/mod_ftpd" baseref="http://git.outoforder.cc/" view="cgit"/>
   </category>
  </downloads>
 
